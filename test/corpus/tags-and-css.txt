@@ -36,6 +36,33 @@ tag app-root
                 (identifier)))))))))
 
 ==================
+Event value before inline style
+==================
+
+tag app-root
+	<self>
+		<div.card @click=save [d:flex g:8px]>
+
+---
+
+(source_file
+  (tag_declaration
+    (identifier)
+    (block
+      (tag_element
+        (tag_name_open)
+        (block
+          (tag_element
+            (tag_name_open)
+            (tag_class)
+            (event_attribute
+              (event_name)
+              (attribute_value
+                (identifier)))
+            (inline_style
+              (style_content))))))))
+
+==================
 CSS blocks
 ==================
 
@@ -45,6 +72,7 @@ tag app-root
 		g:8px
 		.title
 			c:blue6
+		# Narrow layout
 		@media (max-width: 800px)
 			d:block
 
@@ -69,9 +97,10 @@ tag app-root
               (css_declaration
                 property: (style_property_name)
                 value: (css_value))))
+          (css_comment)
           (css_at_rule
             name: (css_at_keyword)
-            value: (css_value)
+            value: (css_at_value)
             (css_block
               (css_declaration
                 property: (style_property_name)

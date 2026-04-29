@@ -24,16 +24,22 @@ module.exports = grammar({
 
   supertypes: ($) => [$._statement, $._expression],
 
+  conflicts: ($) => [
+    [$.block, $._tag_body],
+    [$.css_inline_rule, $.css_inline_rule_with_block],
+  ],
+
   word: ($) => $.identifier,
 
   rules: {
-    source_file: ($) => repeat(choice($._newline, $._statement)),
+    source_file: ($) => repeat(choice($._newline, $.line_comment, $.block_comment, $._statement)),
 
     block: ($) =>
       seq(
         $._newline,
+        repeat($._newline),
         $._indent,
-        repeat(choice($._newline, $._statement)),
+        repeat(choice($._newline, $.line_comment, $.block_comment, $._statement)),
         $._dedent,
       ),
 
@@ -191,8 +197,9 @@ module.exports = grammar({
     css_block: ($) =>
       seq(
         $._newline,
+        repeat($._newline),
         $._indent,
-        repeat(choice($._newline, $.css_at_rule, $.css_rule, $.css_inline_rule, $.css_declaration)),
+        repeat(choice($._newline, $.css_comment, $.line_comment, $.block_comment, $.css_at_rule, $.css_rule, $.css_inline_rule_with_block, $.css_inline_rule, $.css_declaration)),
         $._dedent,
       ),
 
@@ -200,12 +207,15 @@ module.exports = grammar({
       prec.right(
         seq(
           field("name", $.css_at_keyword),
-          optional(field("value", $.css_value)),
+          optional(field("value", $.css_at_value)),
           optional($.css_block),
         ),
       ),
 
     css_rule: ($) => seq(field("selector", $.css_selector), $.css_block),
+
+    css_inline_rule_with_block: ($) =>
+      seq(field("content", $.css_inline_content), $.css_block),
 
     css_inline_rule: ($) =>
       field("content", $.css_inline_content),
@@ -238,7 +248,7 @@ module.exports = grammar({
 
     elif_clause: ($) => seq("elif", field("condition", $._expression), field("body", $.block)),
 
-    else_clause: ($) => seq("else", field("body", choice($.if_statement, $.block))),
+    else_clause: ($) => seq("else", field("body", choice($.if_statement, $.block, $._inline_statement))),
 
     inline_elif_clause: ($) =>
       seq("elif", field("condition", $._expression), "then", field("body", $._inline_statement)),
@@ -264,7 +274,7 @@ module.exports = grammar({
       seq(choice("while", "until"), field("condition", $._expression), field("body", $.block)),
 
     try_statement: ($) =>
-      prec.right(choice(
+      prec.right(1, choice(
         seq(
           "try",
           field("body", $.block),
@@ -274,10 +284,14 @@ module.exports = grammar({
         seq(
           "try",
           field("body", $._inline_statement),
-          optional(seq($._newline, "catch", optional($.identifier), field("handler", $.block))),
+          optional(seq($._newline, "catch", $.identifier, field("handler", choice($.block, $.catch_inline_handler)))),
           optional(seq($._newline, "finally", field("finalizer", $.block))),
+          optional($._newline),
         ),
       )),
+
+    catch_inline_handler: ($) =>
+      prec(2, choice($.return_statement, $.assignment, $.call_expression)),
 
     return_statement: ($) =>
       prec.right(
@@ -286,6 +300,7 @@ module.exports = grammar({
           optional(
             choice(
               seq(choice("if", "unless"), field("condition", $._expression)),
+              $.object_block,
               seq($._expression, optional($.postfix_condition)),
             ),
           ),
@@ -313,6 +328,7 @@ module.exports = grammar({
         $.unary_expression,
         $.update_expression,
         $.new_expression,
+        $.trailing_do_expression,
         $.do_expression,
         $.call_expression,
         $.subscript_expression,
@@ -324,6 +340,7 @@ module.exports = grammar({
       choice(
         $.identifier,
         $.private_identifier,
+        $.placeholder,
         $.regex,
         $.number,
         $.string,
@@ -378,8 +395,9 @@ module.exports = grammar({
     object_block: ($) =>
       seq(
         $._newline,
+        repeat($._newline),
         $._indent,
-        repeat(choice($._newline, $.object_block_entry, $._statement)),
+        repeat(choice($._newline, $.line_comment, $.block_comment, $.object_block_entry, $._statement)),
         $._dedent,
       ),
 
@@ -391,6 +409,17 @@ module.exports = grammar({
     do_expression: ($) =>
       prec.right(
         seq(
+          "do",
+          optional($.do_parameters),
+          optional(choice($.block, $.assignment, $._expression)),
+        ),
+      ),
+
+    trailing_do_expression: ($) =>
+      prec.right(
+        PREC.CALL,
+        seq(
+          field("function", $._expression),
           "do",
           optional($.do_parameters),
           optional(choice($.block, $.assignment, $._expression)),
@@ -517,7 +546,7 @@ module.exports = grammar({
         ),
       ),
 
-    _tag_body: ($) => choice(prec(1, $.block), $._expression, $._newline),
+    _tag_body: ($) => choice(prec(2, $.block), $._expression, $._newline),
 
     tag_attribute: ($) =>
       seq(field("name", $.attribute_name), optional(seq("=", field("value", $.attribute_value)))),
@@ -546,7 +575,7 @@ module.exports = grammar({
         $.attribute_call_expression,
         $.attribute_member_expression,
         $.do_expression,
-        $.parenthesized_expression,
+        $.attribute_parenthesized_expression,
         $.array,
         $.object,
       ),
@@ -569,6 +598,9 @@ module.exports = grammar({
         ),
       ),
 
+    attribute_parenthesized_expression: ($) =>
+      seq("(", choice($._expression, $.assignment), ")"),
+
     attribute_member_expression: ($) =>
       seq(
         choice($.identifier, $.private_identifier),
@@ -586,7 +618,7 @@ module.exports = grammar({
         PREC.MEMBER,
         seq(
           choice($.identifier, $.private_identifier, $.attribute_member_expression),
-          repeat1(seq("[", field("index", choice($.identifier, $.number, $.string, $.attribute_member_expression)), "]")),
+          repeat1(seq(token.immediate("["), field("index", choice($.identifier, $.number, $.string, $.attribute_member_expression)), "]")),
         ),
       ),
 
@@ -626,6 +658,7 @@ module.exports = grammar({
           /0x[0-9a-fA-F]+/,
           /0b[01]+/,
           /0o[0-7]+/,
+          /\.[0-9]+(?:[eE][+-]?[0-9]+)?/,
           /[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/,
         ),
       ),
@@ -640,7 +673,9 @@ module.exports = grammar({
     private_identifier: () =>
       token(prec(2, /#[A-Za-z_][A-Za-z0-9_$]*(?:-[A-Za-z0-9_$]+)*(?:[?!])?/)),
 
-    less_than: () => token(prec(2, "<")),
+    placeholder: () => token("&"),
+
+    less_than: () => token(prec(-1, "<")),
 
     shift_left: () => token(prec(4, "<<")),
 
@@ -672,7 +707,17 @@ module.exports = grammar({
 
     css_at_keyword: () => token(seq("@", /[A-Za-z_-][A-Za-z0-9_-]*/)),
 
-    css_selector: ($) => choice($.css_class_selector, $.css_element_selector),
+    css_at_value: () => token(prec(1, /[^\n]+/)),
+
+    css_comment: () => token(prec(3, /#[ \t][^\n]*/)),
+
+    css_selector: ($) => choice($.css_complex_selector, $.css_custom_selector, $.css_class_selector, $.css_element_selector),
+
+    css_complex_selector: () =>
+      token(prec(1, choice(/[.&:#%][^\n]*,[^\n]*/, /[.&:#%A-Za-z_][^\n:]*[ \t]+[^\n:]*/))),
+
+    css_custom_selector: () =>
+      token(prec(-1, /[A-Za-z][A-Za-z0-9_-]*(?:[.#][^\s\n:]*)?(?:@[A-Za-z0-9_-]+(?:\([^\n)]*\))?)?/)),
 
     css_class_selector: () => token(prec(1, /[.&:#%][^\s\n]+/)),
 
@@ -685,7 +730,7 @@ module.exports = grammar({
       ),
 
     css_inline_content: () =>
-      token(prec(2, /[.&:#%A-Za-z_][^\s\n]*[ \t]+[$A-Za-z_-][A-Za-z0-9_$-]*(?:@[A-Za-z0-9_-]+)?:[^\n]+/)),
+      token(prec(2, /[^\n]+[ \t]+[$A-Za-z_-][A-Za-z0-9_$-]*(?:@[A-Za-z0-9_-]+)?:[^\n]+/)),
 
     css_value: () => token(/[^\n]+/),
   },

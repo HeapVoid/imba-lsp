@@ -65,6 +65,7 @@
 
 (line_comment) @comment
 (block_comment) @comment
+(css_comment) @comment
 
 (string) @string
 (template_string) @string.special
@@ -119,10 +120,15 @@
 (style_content) @embedded
 
 (css_selector) @tag
+(css_complex_selector) @tag
+(css_custom_selector) @tag
 (css_class_selector) @tag
 (css_element_selector) @tag
 (css_inline_content) @string.special
+(css_inline_rule_with_block
+  content: (css_inline_content) @string.special)
 (css_at_keyword) @keyword
+(css_at_value) @string.special
 (style_property_name) @property
 (css_value) @string.special
 

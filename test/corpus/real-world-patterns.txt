@@ -98,9 +98,8 @@ tag login-form
           (css_declaration
             property: (style_property_name)
             value: (css_value))
-          (css_declaration
-            property: (style_property_name)
-            value: (css_value))
+          (css_inline_rule
+            content: (css_inline_content))
           (css_rule
             selector: (css_selector
               (css_class_selector))
@@ -513,3 +512,333 @@ def patterns opts
               function: (identifier)
               arguments: (arguments
                 (identifier)))))))))
+
+==================
+Inline try handlers and comment-leading try blocks
+==================
+
+def cleanup unitPath
+	try require('fs').unlinkSync(unitPath!)
+	catch e logger.debug({err: String(e)}, "unit already gone")
+
+def upload
+	try
+		# Upload image
+		const formData = new FormData!
+	catch error
+		return false
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter
+      (identifier))
+    (block
+      (try_statement
+        (expression_statement
+          (call_expression
+            (member_expression
+              (call_expression
+                (identifier)
+                (arguments
+                  (string)))
+              (identifier))
+            (arguments
+              (identifier))))
+        (identifier)
+        (catch_inline_handler
+          (call_expression
+            (member_expression
+              (identifier)
+              (identifier))
+            (arguments
+              (object
+                (object_entry
+                  (pair
+                    (identifier)
+                    (call_expression
+                      (identifier)
+                      (arguments
+                        (identifier))))))
+              (string)))))))
+  (function_declaration
+    (identifier)
+    (block
+      (try_statement
+        (block
+          (line_comment)
+          (variable_declaration
+            (identifier)
+            (new_expression
+              (identifier))))
+        (identifier)
+        (block
+          (return_statement
+            (boolean)))))))
+
+==================
+Return object blocks, trailing do, and inline else values
+==================
+
+def projects
+	return
+		list: #state.projects.list
+		active: #state.projects.active
+
+def sync mgr
+	items = items.map do(m)
+		if m.id == r.messageId
+			m
+		else m
+	processesTimer = setInterval(&, 60000) do
+		if currentClient
+			currentClient.event("coordinator.processes", {processes: mgr.processesSnapshot!})
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (block
+      (return_statement
+        (object_block
+          (object_block_entry
+            (identifier)
+            (member_expression
+              (member_expression
+                (private_identifier)
+                (identifier))
+              (identifier)))
+          (object_block_entry
+            (identifier)
+            (member_expression
+              (member_expression
+                (private_identifier)
+                (identifier))
+              (identifier)))))))
+  (function_declaration
+    (identifier)
+    (parameter
+      (identifier))
+    (block
+      (assignment
+        (identifier)
+        (call_expression
+          (member_expression
+            (identifier)
+            (identifier))
+          (bare_arguments
+            (do_expression
+              (do_parameters
+                (do_parameter
+                  (identifier)))
+              (block
+                (if_statement
+                  (binary_expression
+                    (member_expression
+                      (identifier)
+                      (identifier))
+                    (member_expression
+                      (identifier)
+                      (identifier)))
+                  (block
+                    (expression_statement
+                      (identifier)))
+                  (else_clause
+                    (expression_statement
+                      (identifier)))))))))
+      (assignment
+        (identifier)
+        (trailing_do_expression
+          (call_expression
+            (identifier)
+            (arguments
+              (placeholder)
+              (number)))
+          (block
+            (if_statement
+              (identifier)
+              (block
+                (expression_statement
+                  (call_expression
+                    (member_expression
+                      (identifier)
+                      (identifier))
+                    (arguments
+                      (string)
+                      (object
+                        (object_entry
+                          (pair
+                            (identifier)
+                            (member_expression
+                              (identifier)
+                              (identifier))))))))))))))))
+
+==================
+CSS selector lists, keyframes, and compact decimals
+==================
+
+global css
+	body
+		ff: Inter, sans-serif
+	h1, h2, h3, h4, h5, h6, p, i, strong m: 0
+	h2 fs: 20px lh: 24px fw: 400
+	p fs: 14px lh: 20px fw: 400
+		&.light c: $base6
+	@keyframes spin
+		0% transform: rotate(0deg)
+		100% transform: rotate(360deg)
+
+let stagger = .16
+
+---
+
+(source_file
+  (css_statement
+    (css_block
+      (css_rule
+        (css_selector
+          (css_element_selector))
+        (css_block
+          (css_declaration
+            (style_property_name)
+            (css_value))))
+      (css_inline_rule
+        (css_inline_content))
+      (css_inline_rule
+        (css_inline_content))
+      (css_inline_rule
+        (css_inline_content))
+      (css_inline_rule_with_block
+        (css_inline_content)
+        (css_block))
+      (css_at_rule
+        (css_at_keyword)
+        (css_at_value)
+        (css_block
+          (css_inline_rule
+            (css_inline_content))
+          (css_inline_rule
+            (css_inline_content))))))
+  (variable_declaration
+    (identifier)
+    (number)))
+
+==================
+CSS custom selectors and pseudo lists
+==================
+
+global css
+	notification-center@not(#_)
+		w: 350px
+	.magic
+		&:after, &:before
+			content: ''
+
+---
+
+(source_file
+  (css_statement
+    (css_block
+      (css_rule
+        (css_selector
+          (css_custom_selector))
+        (css_block
+          (css_declaration
+            (style_property_name)
+            (css_value))))
+      (css_rule
+        (css_selector
+          (css_class_selector))
+        (css_block
+          (css_rule
+            (css_selector
+              (css_complex_selector))
+            (css_block
+              (css_declaration
+                (style_property_name)
+                (css_value)))))))))
+
+==================
+Parenthesized attribute assignments
+==================
+
+<button.primary @click=(showOAuth = yes)> "Authorize"
+<WorkspaceOAuthModal workspace=workspace onclose=(do showOAuth = no)>
+
+---
+
+(source_file
+  (tag_element
+    (tag_name_open)
+    (tag_class)
+    (event_attribute
+      (event_name)
+      (attribute_value
+        (attribute_parenthesized_expression
+          (assignment
+            (identifier)
+            (boolean)))))
+    (string))
+  (tag_element
+    (tag_name_open)
+    (tag_attribute
+      (attribute_name)
+      (attribute_value
+        (identifier)))
+    (tag_attribute
+      (attribute_name)
+      (attribute_value
+        (attribute_parenthesized_expression
+          (do_expression
+            (assignment
+              (identifier)
+              (boolean))))))))
+
+==================
+Declaration blocks after blank lines
+==================
+
+export class RpcDispatcher
+
+	handlers
+
+	def constructor
+		handlers = new Map
+
+tag right-panel
+
+	def open
+		window.open('/demo')
+
+---
+
+(source_file
+  (class_declaration
+    (export_modifier)
+    (identifier)
+    (block
+      (expression_statement
+        (identifier))
+      (function_declaration
+        (identifier)
+        (block
+          (assignment
+            (identifier)
+            (new_expression
+              (identifier)))))))
+  (tag_declaration
+    (identifier)
+    (block
+      (function_declaration
+        (identifier)
+        (block
+          (expression_statement
+            (call_expression
+              (member_expression
+                (identifier)
+                (identifier))
+              (arguments
+                (string)))))))))

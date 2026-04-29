@@ -160,7 +160,6 @@ bool tree_sitter_imba_external_scanner_scan(void *payload, TSLexer *lexer, const
     bool structural_line =
       lexer->lookahead != '\n' &&
       lexer->lookahead != '\r' &&
-      lexer->lookahead != '#' &&
       !lexer->eof(lexer);
 
     if (structural_line) {
@@ -180,4 +179,3 @@ bool tree_sitter_imba_external_scanner_scan(void *payload, TSLexer *lexer, const
 
   return false;
 }
-

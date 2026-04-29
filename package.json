@@ -7,7 +7,8 @@
   "scripts": {
     "generate": "tree-sitter generate",
     "test": "tree-sitter test",
-    "parse:sample": "tree-sitter parse examples/sample.imba"
+    "parse:sample": "tree-sitter parse examples/sample.imba",
+    "zed:build-grammar": "bash scripts/check-zed-grammar-build.sh"
   },
   "keywords": [
     "imba",
@@ -29,4 +30,3 @@
     }
   ]
 }
-

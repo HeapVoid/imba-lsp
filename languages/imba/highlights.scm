@@ -1,5 +1,6 @@
 [
   "and"
+  "as"
   "await"
   "break"
   "catch"
@@ -7,8 +8,10 @@
   "const"
   "continue"
   "css"
+  "delete"
   "def"
   "default"
+  "do"
   "elif"
   "else"
   "export"
@@ -21,21 +24,29 @@
   "if"
   "import"
   "in"
+  "instanceof"
   "isa"
   "is"
   "isnt"
   "let"
   "nil"
+  "new"
   "not"
   "of"
   "or"
+  "own"
+  "prop"
   "return"
   "set"
   "tag"
+  "then"
   "throw"
+  "typeof"
   "try"
   "until"
+  "unless"
   "var"
+  "void"
   "when"
   "while"
 ] @keyword
@@ -58,6 +69,7 @@
 (string) @string
 (template_string) @string.special
 (escape_sequence) @string.escape
+(regex) @string.regex
 (number) @number
 
 (function_declaration
@@ -75,12 +87,23 @@
 (parameter
   name: (_) @variable.parameter)
 
+(do_parameter
+  name: (_) @variable.parameter)
+
+(type_annotation
+  type: (_) @type)
+
 (private_identifier) @variable.special
 (identifier) @variable
 
 (tag_element
-  name: (tag_name) @tag)
+  name: (tag_name_open) @tag)
 
+(tag_class_open) @attribute
+(tag_id_open) @attribute
+(tag_reference_open) @variable.special
+(tag_class_binding
+  name: (tag_class) @attribute)
 (tag_class) @attribute
 (tag_id) @attribute
 (tag_reference) @variable.special
@@ -96,6 +119,9 @@
 (style_content) @embedded
 
 (css_selector) @tag
+(css_class_selector) @tag
+(css_element_selector) @tag
+(css_inline_content) @string.special
 (css_at_keyword) @keyword
 (style_property_name) @property
 (css_value) @string.special
@@ -110,6 +136,8 @@
   "||="
   "&&="
   "=?"
+  "++"
+  "--"
   "+"
   "-"
   "*"
@@ -127,6 +155,9 @@
   "."
   ".."
 ] @operator
+
+(less_than) @operator
+(shift_left) @operator
 
 [
   "("

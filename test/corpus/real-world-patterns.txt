@@ -1,0 +1,515 @@
+==================
+Imports, callbacks, and access
+==================
+
+import * as API from './api.imba'
+export const notify = new Notifications!
+const logger = do(ecode, details)
+	notify.error(ecode, details)
+lex.onready = do imba.commit!
+return lex['auth-forms']['login']
+return '' if !(email isa 'string')
+
+---
+
+(source_file
+  (import_statement
+    (import_clause
+      (namespace_import
+        (identifier)))
+    (string))
+  (variable_declaration
+    (export_modifier)
+    name: (identifier)
+    value: (new_expression
+      constructor: (identifier)))
+  (variable_declaration
+    name: (identifier)
+    value: (do_expression
+      (do_parameters
+        (do_parameter
+          name: (identifier))
+        (do_parameter
+          name: (identifier)))
+      (block
+        (expression_statement
+          (call_expression
+            function: (member_expression
+              object: (identifier)
+              property: (identifier))
+            arguments: (arguments
+              (identifier)
+              (identifier)))))))
+  (assignment
+    left: (member_expression
+      object: (identifier)
+      property: (identifier))
+    right: (do_expression
+      (member_expression
+        object: (identifier)
+        property: (identifier))))
+  (return_statement
+    (subscript_expression
+      object: (subscript_expression
+        object: (identifier)
+        index: (string))
+      index: (string)))
+  (return_statement
+    (string)
+    (postfix_condition
+      condition: (unary_expression
+        argument: (parenthesized_expression
+          (binary_expression
+            left: (identifier)
+            right: (string)))))))
+
+==================
+Guard return and CSS rows
+==================
+
+tag login-form
+	def do-login
+		return if !email or !password
+
+	css self
+		$base1: warm1
+		d: flex fld: column g: 8px
+		.title
+			h1 fs: 24px fw: 500 c: $base2 lh: 32px
+			&:hover opacity: 0.9
+
+---
+
+(source_file
+  (tag_declaration
+    name: (identifier)
+    (block
+      (function_declaration
+        name: (identifier)
+        (block
+          (return_statement
+            condition: (binary_expression
+              left: (unary_expression
+                argument: (identifier))
+              right: (unary_expression
+                argument: (identifier))))))
+      (css_statement
+        (css_block
+          (css_declaration
+            property: (style_property_name)
+            value: (css_value))
+          (css_declaration
+            property: (style_property_name)
+            value: (css_value))
+          (css_rule
+            selector: (css_selector
+              (css_class_selector))
+            (css_block
+              (css_inline_rule
+                content: (css_inline_content))
+              (css_inline_rule
+                content: (css_inline_content)))))))))
+
+==================
+Typed params, object blocks, and inline branches
+==================
+
+export const user =
+	login: do(email\string, password\string)
+		await db.login(email, password)
+	update: do(data = {})
+		return data
+
+tag login-form
+	<self>
+		<input placeholder=loc['email'] disabled=!valid @keydown.enter=do-login!>
+	def check flags
+		if flags.ready then out.ready = yes
+		elif flags.error then throw new Error('bad')
+		return flags.ready ? "Ready" : "Idle"
+
+---
+
+(source_file
+  (variable_declaration
+    (export_modifier)
+    name: (identifier)
+    value: (object_block
+      (object_block_entry
+        key: (identifier)
+        value: (do_expression
+          (do_parameters
+            (do_parameter
+              name: (identifier)
+              (type_annotation
+                type: (identifier)))
+            (do_parameter
+              name: (identifier)
+              (type_annotation
+                type: (identifier))))
+          (block
+            (expression_statement
+              (unary_expression
+                argument: (call_expression
+                  function: (member_expression
+                    object: (identifier)
+                    property: (identifier))
+                  arguments: (arguments
+                    (identifier)
+                    (identifier))))))))
+      (object_block_entry
+        key: (identifier)
+        value: (do_expression
+          (do_parameters
+            (do_parameter
+              name: (identifier)
+              default: (object)))
+          (block
+            (return_statement
+              (identifier)))))))
+  (tag_declaration
+    name: (identifier)
+    (block
+      (tag_element
+        name: (tag_name_open)
+        (block
+          (tag_element
+            name: (tag_name_open)
+            (tag_attribute
+              name: (attribute_name)
+              value: (attribute_value
+                (attribute_subscript_expression
+                  (identifier)
+                  index: (string))))
+            (tag_attribute
+              name: (attribute_name)
+              value: (attribute_value
+                (attribute_unary_expression
+                  argument: (identifier))))
+            (event_attribute
+              name: (event_name)
+              value: (attribute_value
+                (identifier))))))
+      (function_declaration
+        name: (identifier)
+        (parameter
+          name: (identifier))
+        (block
+          (if_statement
+            condition: (member_expression
+              object: (identifier)
+              property: (identifier))
+            consequence: (assignment
+              left: (member_expression
+                object: (identifier)
+                property: (identifier))
+              right: (boolean)))
+          (inline_elif_clause
+            condition: (member_expression
+              object: (identifier)
+              property: (identifier))
+            body: (return_statement
+              (new_expression
+                constructor: (call_expression
+                  function: (identifier)
+                  arguments: (arguments
+                    (string))))))
+          (return_statement
+            (ternary_expression
+              condition: (member_expression
+                object: (identifier)
+                property: (identifier))
+              consequence: (string)
+              alternative: (string))))))))
+
+==================
+Arrays, regex, and less-than comparisons
+==================
+
+const ROLES = [
+	{key: 'admin', label: 'Admin'}
+	{key: 'member', label: 'Member'}
+]
+
+def email? value\string
+	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+
+def size password, flags
+	while i < flags.length
+		return password.length < 6
+
+---
+
+(source_file
+  (variable_declaration
+    name: (identifier)
+    value: (array
+      (object
+        (object_entry
+          (pair
+            key: (identifier)
+            value: (string)))
+        (object_entry
+          (pair
+            key: (identifier)
+            value: (string))))
+      (object
+        (object_entry
+          (pair
+            key: (identifier)
+            value: (string)))
+        (object_entry
+          (pair
+            key: (identifier)
+            value: (string))))))
+  (function_declaration
+    name: (identifier)
+    (parameter
+      name: (identifier)
+      (type_annotation
+        type: (identifier)))
+    (block
+      (return_statement
+        (call_expression
+          function: (member_expression
+            object: (regex)
+            property: (identifier))
+          arguments: (arguments
+            (identifier))))))
+  (function_declaration
+    name: (identifier)
+    (parameter
+      name: (identifier))
+    (parameter
+      name: (identifier))
+    (block
+      (while_statement
+        condition: (binary_expression
+          left: (identifier)
+          operator: (less_than)
+          right: (member_expression
+            object: (identifier)
+            property: (identifier)))
+        body: (block
+          (return_statement
+            (binary_expression
+              left: (member_expression
+                object: (identifier)
+                property: (identifier))
+              operator: (less_than)
+              right: (number))))))))
+
+==================
+Update, regex classes, and shift operators
+==================
+
+def calc hash, text
+	if /^[A-Za-z0-9_@%+=:,./-]+$/.test(text)
+		return hash << 5
+	i++
+
+---
+
+(source_file
+  (function_declaration
+    name: (identifier)
+    (parameter
+      name: (identifier))
+    (parameter
+      name: (identifier))
+    (block
+      (if_statement
+        condition: (call_expression
+          function: (member_expression
+            object: (regex)
+            property: (identifier))
+          arguments: (arguments
+            (identifier)))
+        consequence: (block
+          (return_statement
+            (binary_expression
+              left: (identifier)
+              operator: (shift_left)
+              right: (number)))))
+      (expression_statement
+        (update_expression
+          argument: (identifier))))))
+
+==================
+Typed fields, props, else-if, and own loops
+==================
+
+export tag WorkspaceDetail
+	prop workspace\any = null
+	showOAuth\bool = no
+	items\any[] = []
+	let h\number
+	if err instanceof TerminalError
+		return typeof err.reason
+	else if workspace and !workspace.ready
+		return void workspace
+	for own name, a of workspace.agents
+		delete a.tmp
+
+---
+
+(source_file
+  (tag_declaration
+    (export_modifier)
+    name: (identifier)
+    (block
+      (field_declaration
+        name: (identifier)
+        (type_annotation
+          type: (identifier))
+        value: (nil))
+      (field_declaration
+        name: (identifier)
+        (type_annotation
+          type: (identifier))
+        value: (boolean))
+      (field_declaration
+        name: (identifier)
+        (type_annotation
+          type: (identifier))
+        value: (array))
+      (variable_declaration
+        name: (identifier)
+        (type_annotation
+          type: (identifier)))
+      (if_statement
+        condition: (binary_expression
+          left: (identifier)
+          right: (identifier))
+        consequence: (block
+          (return_statement
+            (unary_expression
+              argument: (member_expression
+                object: (identifier)
+                property: (identifier)))))
+        (else_clause
+          body: (if_statement
+            condition: (binary_expression
+              left: (identifier)
+              right: (unary_expression
+                argument: (member_expression
+                  object: (identifier)
+                  property: (identifier))))
+            consequence: (block
+              (return_statement
+                (unary_expression
+                  argument: (identifier)))))))
+      (for_statement
+        left: (identifier)
+        left: (identifier)
+        right: (member_expression
+          object: (identifier)
+          property: (identifier))
+        body: (block
+          (expression_statement
+            (unary_expression
+              argument: (member_expression
+                object: (identifier)
+                property: (identifier)))))))))
+
+==================
+Inline try, spread arrays, do callbacks, and class bindings
+==================
+
+def patterns opts
+	try mkdirSync(stateDir, {recursive: true})
+	catch e
+		null
+	p.stderr.on('data', do(d) stderr += d.toString!)
+	items = [e.record, ...items]
+	items = items.map do(w) w.id == e.record.id ? e.record : w
+	<div.row .selected=isSel @click=onRowClick(ws)>
+
+---
+
+(source_file
+  (function_declaration
+    name: (identifier)
+    (parameter
+      name: (identifier))
+    (block
+      (try_statement
+        body: (expression_statement
+          (call_expression
+            function: (identifier)
+            arguments: (arguments
+              (identifier)
+              (object
+                (object_entry
+                  (pair
+                    key: (identifier)
+                    value: (boolean)))))))
+        (identifier)
+        handler: (block
+          (expression_statement
+            (nil))))
+      (expression_statement
+        (call_expression
+          function: (member_expression
+            object: (member_expression
+              object: (identifier)
+              property: (identifier))
+            property: (identifier))
+          arguments: (arguments
+            (string)
+            (do_expression
+              (do_parameters
+                (do_parameter
+                  name: (identifier)))
+              (assignment
+                left: (identifier)
+                right: (member_expression
+                  object: (identifier)
+                  property: (identifier)))))))
+      (assignment
+        left: (identifier)
+        right: (array
+          (member_expression
+            object: (identifier)
+            property: (identifier))
+          (spread_element
+            (identifier))))
+      (assignment
+        left: (identifier)
+        right: (call_expression
+          function: (member_expression
+            object: (identifier)
+            property: (identifier))
+          arguments: (bare_arguments
+            (do_expression
+              (do_parameters
+                (do_parameter
+                  name: (identifier)))
+              (ternary_expression
+                condition: (binary_expression
+                  left: (member_expression
+                    object: (identifier)
+                    property: (identifier))
+                  right: (member_expression
+                    object: (member_expression
+                      object: (identifier)
+                      property: (identifier))
+                    property: (identifier)))
+                consequence: (member_expression
+                  object: (identifier)
+                  property: (identifier))
+                alternative: (identifier))))))
+      (tag_element
+        name: (tag_name_open)
+        (tag_class)
+        (tag_class_binding
+          name: (tag_class)
+          value: (attribute_value
+            (identifier)))
+        (event_attribute
+          name: (event_name)
+          value: (attribute_value
+            (attribute_call_expression
+              function: (identifier)
+              arguments: (arguments
+                (identifier)))))))))

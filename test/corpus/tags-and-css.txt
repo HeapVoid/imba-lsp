@@ -14,10 +14,10 @@ tag app-root
     name: (identifier)
     (block
       (tag_element
-        name: (tag_name)
+        name: (tag_name_open)
         (block
           (tag_element
-            name: (tag_name)
+            name: (tag_name_open)
             (tag_class)
             (event_attribute
               name: (event_name)
@@ -31,7 +31,7 @@ tag app-root
               (style_content))
             (block
               (tag_element
-                name: (tag_name)
+                name: (tag_name_open)
                 (tag_class)
                 (identifier)))))))))
 
@@ -63,7 +63,8 @@ tag app-root
             property: (style_property_name)
             value: (css_value))
           (css_rule
-            selector: (css_selector)
+            selector: (css_selector
+              (css_class_selector))
             (css_block
               (css_declaration
                 property: (style_property_name)

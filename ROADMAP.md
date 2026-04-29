@@ -9,9 +9,9 @@ Goal: useful Zed-native syntax highlighting and structure support for `.imba` fi
 - [x] Add indentation-aware external scanner.
 - [x] Add corpus coverage for comments, declarations, tags, CSS, imports, and control flow.
 - [x] Add initial Zed language config and query files.
-- [ ] Run the grammar against real Imba files from local projects and collect parse errors.
-- [ ] Expand tag parsing for named refs, dynamic tags, conditional classes, and richer attribute values.
-- [ ] Expand expression parsing for ranges, postfix modifiers, `do` callbacks, object-literal `def`, and Imba-specific operators.
+- [x] Run the grammar against real Imba files from local projects and collect parse errors.
+- [ ] Expand tag parsing for named refs, dynamic tags, conditional classes, and richer attribute values. Initial support exists for dynamic class bindings and richer attribute calls/subscripts.
+- [ ] Expand expression parsing for ranges, postfix modifiers, `do` callbacks, object-literal `def`, and Imba-specific operators. Initial support exists for `do` callbacks, typed params/fields, ternaries, regex literals, `typeof`/`instanceof`, `for own`, spread arrays, and update/shift operators.
 - [ ] Improve CSS block parsing and injection boundaries.
 - [ ] Add textobjects and better outline queries.
 
@@ -49,7 +49,7 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 ## Known Risks
 
 - Imba's indentation and tag syntax are not JavaScript-shaped; grammar error recovery will need real-world samples.
+- Current real-world parser smoke set is 91 local `.imba` files; this iteration parses 25 cleanly and uses the remaining failures as the next grammar backlog.
 - VS Code completions depend on a custom bridge, while the TypeScript plugin's standard `getCompletionsAtPosition` currently returns `null`.
 - CSS in Imba is its own compiled DSL, not raw CSS; Tree-sitter injection should start conservative.
 - Zed extension publishing requires a valid accepted license for extension code.
-

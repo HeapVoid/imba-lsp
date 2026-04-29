@@ -1,13 +1,15 @@
 const PREC = {
   ASSIGN: 1,
-  OR: 2,
-  AND: 3,
-  COMPARE: 4,
-  ADD: 5,
-  MULTIPLY: 6,
-  UNARY: 7,
-  CALL: 8,
-  MEMBER: 9,
+  TERNARY: 2,
+  OR: 3,
+  AND: 4,
+  COMPARE: 5,
+  SHIFT: 6,
+  ADD: 7,
+  MULTIPLY: 8,
+  UNARY: 9,
+  CALL: 10,
+  MEMBER: 11,
 };
 
 const commaSep = (rule) => optional(seq(rule, repeat(seq(",", rule)), optional(",")));
@@ -44,12 +46,16 @@ module.exports = grammar({
         $.tag_declaration,
         $.css_statement,
         $.variable_declaration,
+        $.field_declaration,
         $.if_statement,
         $.for_statement,
         $.while_statement,
         $.try_statement,
         $.return_statement,
         $.assignment,
+        $.decorator,
+        $.inline_elif_clause,
+        $.inline_else_clause,
         prec(2, $.tag_element),
         $.expression_statement,
       ),
@@ -70,8 +76,11 @@ module.exports = grammar({
         $.identifier,
         $.named_imports,
         seq($.identifier, ",", $.named_imports),
+        $.namespace_import,
         seq("type", choice($.identifier, $.named_imports)),
       ),
+
+    namespace_import: ($) => seq("*", "as", $.identifier),
 
     named_imports: ($) => seq("{", commaSep($.import_specifier), "}"),
 
@@ -82,8 +91,24 @@ module.exports = grammar({
       seq(
         optional($.export_modifier),
         choice("let", "const", "var"),
-        field("name", choice($.identifier, $.private_identifier)),
-        optional(seq("=", field("value", $._expression))),
+        field("name", $._binding_pattern),
+        optional($.type_annotation),
+        optional(seq("=", field("value", choice($._expression, $.object_block)))),
+      ),
+
+    field_declaration: ($) =>
+      choice(
+        seq(
+          "prop",
+          field("name", choice($.identifier, $.private_identifier)),
+          optional($.type_annotation),
+          optional(seq("=", field("value", $._expression))),
+        ),
+        seq(
+          field("name", choice($.identifier, $.private_identifier)),
+          $.type_annotation,
+          optional(seq("=", field("value", $._expression))),
+        ),
       ),
 
     function_declaration: ($) =>
@@ -92,7 +117,7 @@ module.exports = grammar({
           optional($.export_modifier),
           "def",
           field("name", choice($.identifier, $.private_identifier)),
-          repeat($.parameter),
+          optional($._parameters),
           optional(choice($.block, seq("do", $._expression))),
         ),
       ),
@@ -103,16 +128,33 @@ module.exports = grammar({
           optional($.export_modifier),
           choice("get", "set"),
           field("name", choice($.identifier, $.private_identifier)),
-          repeat($.parameter),
+          optional($._parameters),
           optional($.block),
         ),
       ),
 
+    _parameters: ($) => prec.right(commaSep1($.parameter)),
+
     parameter: ($) =>
       seq(
         field("name", choice($.identifier, $.private_identifier)),
+        optional($.type_annotation),
         optional(seq("=", field("default", $._expression))),
       ),
+
+    type_annotation: ($) => seq("\\", field("type", $._type_expression)),
+
+    _type_expression: ($) =>
+      prec.right(seq($.identifier, repeat(seq(".", $.identifier)), repeat("[]"))),
+
+    _binding_pattern: ($) =>
+      choice($.identifier, $.private_identifier, $.array_pattern, $.object_pattern),
+
+    array_pattern: ($) => seq("[", commaSep(choice($.identifier, $.private_identifier, $.rest_pattern)), "]"),
+
+    object_pattern: ($) => seq("{", commaSep(choice($.identifier, $.private_identifier, $.rest_pattern)), "}"),
+
+    rest_pattern: ($) => seq("...", choice($.identifier, $.private_identifier)),
 
     class_declaration: ($) =>
       prec.right(
@@ -150,7 +192,7 @@ module.exports = grammar({
       seq(
         $._newline,
         $._indent,
-        repeat(choice($._newline, $.css_at_rule, $.css_rule, $.css_declaration)),
+        repeat(choice($._newline, $.css_at_rule, $.css_rule, $.css_inline_rule, $.css_declaration)),
         $._dedent,
       ),
 
@@ -165,6 +207,9 @@ module.exports = grammar({
 
     css_rule: ($) => seq(field("selector", $.css_selector), $.css_block),
 
+    css_inline_rule: ($) =>
+      field("content", $.css_inline_content),
+
     css_declaration: ($) =>
       seq(
         field("property", $.style_property_name),
@@ -173,21 +218,41 @@ module.exports = grammar({
       ),
 
     if_statement: ($) =>
-      seq(
-        "if",
-        field("condition", $._expression),
-        field("consequence", $.block),
-        repeat($.elif_clause),
-        optional($.else_clause),
+      prec.right(
+        choice(
+        seq(
+          "if",
+          field("condition", $._expression),
+          field("consequence", $.block),
+          repeat($.elif_clause),
+          optional($.else_clause),
+        ),
+        seq(
+          "if",
+          field("condition", $._expression),
+          "then",
+          field("consequence", $._inline_statement),
+        ),
+        ),
       ),
 
     elif_clause: ($) => seq("elif", field("condition", $._expression), field("body", $.block)),
 
-    else_clause: ($) => seq("else", field("body", $.block)),
+    else_clause: ($) => seq("else", field("body", choice($.if_statement, $.block))),
+
+    inline_elif_clause: ($) =>
+      seq("elif", field("condition", $._expression), "then", field("body", $._inline_statement)),
+
+    inline_else_clause: ($) =>
+      seq("else", optional("then"), field("body", $._inline_statement)),
+
+    _inline_statement: ($) =>
+      choice($.return_statement, $.assignment, $.expression_statement),
 
     for_statement: ($) =>
       seq(
         "for",
+        optional("own"),
         field("left", commaSep1($.identifier)),
         choice("in", "of"),
         field("right", $._expression),
@@ -199,33 +264,58 @@ module.exports = grammar({
       seq(choice("while", "until"), field("condition", $._expression), field("body", $.block)),
 
     try_statement: ($) =>
-      seq(
-        "try",
-        field("body", $.block),
-        optional(seq("catch", optional($.identifier), field("handler", $.block))),
-        optional(seq("finally", field("finalizer", $.block))),
-      ),
+      prec.right(choice(
+        seq(
+          "try",
+          field("body", $.block),
+          optional(seq("catch", optional($.identifier), field("handler", $.block))),
+          optional(seq("finally", field("finalizer", $.block))),
+        ),
+        seq(
+          "try",
+          field("body", $._inline_statement),
+          optional(seq($._newline, "catch", optional($.identifier), field("handler", $.block))),
+          optional(seq($._newline, "finally", field("finalizer", $.block))),
+        ),
+      )),
 
     return_statement: ($) =>
-      prec.right(seq(choice("return", "break", "continue", "throw"), optional($._expression))),
+      prec.right(
+        seq(
+          choice("return", "break", "continue", "throw"),
+          optional(
+            choice(
+              seq(choice("if", "unless"), field("condition", $._expression)),
+              seq($._expression, optional($.postfix_condition)),
+            ),
+          ),
+        ),
+      ),
 
     assignment: ($) =>
       prec.right(
         PREC.ASSIGN,
         seq(
-          field("left", choice($.identifier, $.private_identifier, $.member_expression)),
+          field("left", choice($.identifier, $.private_identifier, $.member_expression, $.subscript_expression)),
           field("operator", choice("=", "+=", "-=", "*=", "/=", "?=", "||=", "&&=", "=?")),
-          field("right", $._expression),
+          field("right", choice($._expression, $.object_block)),
         ),
       ),
 
-    expression_statement: ($) => $._expression,
+    expression_statement: ($) => prec.right(seq($._expression, optional($.postfix_condition))),
+
+    postfix_condition: ($) => seq(choice("if", "unless"), field("condition", $._expression)),
 
     _expression: ($) =>
       choice(
+        $.ternary_expression,
         $.binary_expression,
         $.unary_expression,
+        $.update_expression,
+        $.new_expression,
+        $.do_expression,
         $.call_expression,
+        $.subscript_expression,
         $.member_expression,
         $._primary_expression,
       ),
@@ -234,6 +324,7 @@ module.exports = grammar({
       choice(
         $.identifier,
         $.private_identifier,
+        $.regex,
         $.number,
         $.string,
         $.template_string,
@@ -247,11 +338,86 @@ module.exports = grammar({
 
     parenthesized_expression: ($) => seq("(", $._expression, ")"),
 
-    array: ($) => seq("[", commaSep($._expression), "]"),
+    array: ($) =>
+      choice(
+        seq("[", commaSep($._array_element), "]"),
+        seq(
+          "[",
+          $._newline,
+          $._indent,
+          repeat(choice($._newline, seq($._array_element, optional(",")))),
+          $._dedent,
+          "]",
+        ),
+      ),
 
-    object: ($) => seq("{", commaSep(choice($.pair, $._expression)), "}"),
+    _array_element: ($) => choice($._expression, $.spread_element),
+
+    object: ($) =>
+      choice(
+        seq("{", commaSep($.object_entry), "}"),
+        seq(
+          "{",
+          $._newline,
+          $._indent,
+          repeat(choice($._newline, seq($.object_entry, optional(",")))),
+          $._dedent,
+          "}",
+        ),
+      ),
+
+    object_entry: ($) =>
+      choice($.pair, $.shorthand_property, $.spread_element),
 
     pair: ($) => seq(field("key", choice($.identifier, $.string)), ":", field("value", $._expression)),
+
+    shorthand_property: ($) => $.identifier,
+
+    spread_element: ($) => seq("...", $._expression),
+
+    object_block: ($) =>
+      seq(
+        $._newline,
+        $._indent,
+        repeat(choice($._newline, $.object_block_entry, $._statement)),
+        $._dedent,
+      ),
+
+    object_block_entry: ($) =>
+      seq(field("key", choice($.identifier, $.string)), ":", field("value", $._expression)),
+
+    decorator: ($) => prec.right(seq("@", field("name", $.identifier), optional($.arguments))),
+
+    do_expression: ($) =>
+      prec.right(
+        seq(
+          "do",
+          optional($.do_parameters),
+          optional(choice($.block, $.assignment, $._expression)),
+        ),
+      ),
+
+    do_parameters: ($) => seq("(", commaSep($.do_parameter), ")"),
+
+    do_parameter: ($) =>
+      prec(
+        1,
+        seq(
+          field("name", choice($.identifier, $.private_identifier)),
+          optional($.type_annotation),
+          optional(seq("=", field("default", $._expression))),
+        ),
+      ),
+
+    new_expression: ($) =>
+      prec.right(
+        PREC.UNARY,
+        seq(
+          "new",
+          field("constructor", $._expression),
+          optional(choice($.arguments, "!")),
+        ),
+      ),
 
     member_expression: ($) =>
       prec.left(
@@ -260,6 +426,29 @@ module.exports = grammar({
           field("object", $._expression),
           field("operator", choice(".", "..")),
           field("property", choice($.identifier, $.private_identifier)),
+        ),
+      ),
+
+    subscript_expression: ($) =>
+      prec.left(
+        PREC.MEMBER,
+        seq(
+          field("object", $._expression),
+          "[",
+          optional(field("index", $._expression)),
+          "]",
+        ),
+      ),
+
+    ternary_expression: ($) =>
+      prec.right(
+        PREC.TERNARY,
+        seq(
+          field("condition", $._expression),
+          "?",
+          field("consequence", $._expression),
+          ":",
+          field("alternative", $._expression),
         ),
       ),
 
@@ -283,23 +472,30 @@ module.exports = grammar({
         $.template_string,
         $.boolean,
         $.nil,
-        $.array,
         $.object,
+        $.do_expression,
         $.tag_element,
       ),
 
     unary_expression: ($) =>
       prec(
         PREC.UNARY,
-        seq(field("operator", choice("!", "not", "-", "+", "await")), field("argument", $._expression)),
+        seq(field("operator", choice("!", "not", "-", "+", "await", "typeof", "void", "delete")), field("argument", $._expression)),
       ),
+
+    update_expression: ($) =>
+      prec(PREC.UNARY, seq(field("argument", $._assignable_expression), field("operator", choice("++", "--")))),
+
+    _assignable_expression: ($) =>
+      prec(1, choice($.identifier, $.private_identifier, $.member_expression, $.subscript_expression)),
 
     binary_expression: ($) =>
       choice(
         ...[
           [PREC.OR, choice("or", "||", "??")],
           [PREC.AND, choice("and", "&&")],
-          [PREC.COMPARE, choice("is", "isnt", "isa", "==", "!=", "===", "!==", "<", "<=", ">", ">=")],
+          [PREC.COMPARE, choice("is", "isnt", "isa", "instanceof", "==", "!=", "===", "!==", $.less_than, "<=", ">", ">=")],
+          [PREC.SHIFT, choice($.shift_left, ">>", ">>>")],
           [PREC.ADD, choice("+", "-")],
           [PREC.MULTIPLY, choice("*", "/", "%")],
         ].map(([precedence, operator]) =>
@@ -314,16 +510,20 @@ module.exports = grammar({
       prec.right(
         1,
         seq(
-          "<",
-          optional(field("name", $.tag_name)),
-          repeat(choice($.tag_class, $.tag_id, $.tag_reference, $.tag_attribute, $.event_attribute, $.inline_style)),
+          choice(field("name", $.tag_name_open), $.tag_class_open, $.tag_id_open, $.tag_reference_open),
+          repeat(choice($.tag_class_binding, $.tag_class, $.tag_id, $.tag_reference, $.tag_attribute, $.event_attribute, $.inline_style)),
           ">",
-          optional(choice($.block, $._expression)),
+          optional($._tag_body),
         ),
       ),
 
+    _tag_body: ($) => choice(prec(1, $.block), $._expression, $._newline),
+
     tag_attribute: ($) =>
       seq(field("name", $.attribute_name), optional(seq("=", field("value", $.attribute_value)))),
+
+    tag_class_binding: ($) =>
+      prec(1, seq(field("name", $.tag_class), "=", field("value", $.attribute_value))),
 
     event_attribute: ($) =>
       seq(
@@ -334,6 +534,8 @@ module.exports = grammar({
 
     attribute_value: ($) =>
       choice(
+        $.attribute_unary_expression,
+        $.attribute_subscript_expression,
         $.identifier,
         $.private_identifier,
         $.number,
@@ -341,16 +543,51 @@ module.exports = grammar({
         $.template_string,
         $.boolean,
         $.nil,
+        $.attribute_call_expression,
         $.attribute_member_expression,
+        $.do_expression,
         $.parenthesized_expression,
         $.array,
         $.object,
+      ),
+
+    attribute_unary_expression: ($) =>
+      prec(
+        PREC.UNARY,
+        seq(
+          field("operator", choice("!", "not", "-", "+")),
+          field(
+            "argument",
+            choice(
+              $.identifier,
+              $.private_identifier,
+              $.number,
+              $.attribute_member_expression,
+              $.attribute_subscript_expression,
+            ),
+          ),
+        ),
       ),
 
     attribute_member_expression: ($) =>
       seq(
         choice($.identifier, $.private_identifier),
         repeat1(seq(choice(".", ".."), choice($.identifier, $.private_identifier))),
+      ),
+
+    attribute_call_expression: ($) =>
+      seq(
+        field("function", choice($.identifier, $.private_identifier, $.attribute_member_expression)),
+        field("arguments", $.arguments),
+      ),
+
+    attribute_subscript_expression: ($) =>
+      prec(
+        PREC.MEMBER,
+        seq(
+          choice($.identifier, $.private_identifier, $.attribute_member_expression),
+          repeat1(seq("[", field("index", choice($.identifier, $.number, $.string, $.attribute_member_expression)), "]")),
+        ),
       ),
 
     inline_style: ($) => seq("[", optional($.style_content), "]"),
@@ -370,6 +607,19 @@ module.exports = grammar({
 
     escape_sequence: () => token.immediate(seq("\\", /./)),
 
+    regex: () =>
+      token(
+        prec(
+          1,
+          seq(
+            "/",
+            repeat1(choice(/\\[^\n]/, /\[(?:\\[^\n]|[^\]\\\n])*\]/, /[^/\\\[\n]+/)),
+            "/",
+            optional(/[A-Za-z]+/),
+          ),
+        ),
+      ),
+
     number: () =>
       token(
         choice(
@@ -385,12 +635,24 @@ module.exports = grammar({
     nil: () => choice("null", "nil", "undefined"),
 
     identifier: () =>
-      token(prec(-1, /[$A-Za-z_][A-Za-z0-9_$]*(?:-[A-Za-z0-9_$]+)*(?:[?!])?/)),
+      token(prec(0, /[$A-Za-z_][A-Za-z0-9_$]*(?:-[A-Za-z0-9_$]+)*(?:[?!])?/)),
 
     private_identifier: () =>
       token(prec(2, /#[A-Za-z_][A-Za-z0-9_$]*(?:-[A-Za-z0-9_$]+)*(?:[?!])?/)),
 
+    less_than: () => token(prec(2, "<")),
+
+    shift_left: () => token(prec(4, "<<")),
+
     tag_name: () => token(prec(1, /[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*/)),
+
+    tag_name_open: () => token(prec(3, seq("<", /[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*/))),
+
+    tag_class_open: () => token(prec(3, seq("<.", /[A-Za-z_][A-Za-z0-9_-]*/))),
+
+    tag_id_open: () => token(prec(3, seq("<#", /[A-Za-z_][A-Za-z0-9_-]*/))),
+
+    tag_reference_open: () => token(prec(3, seq("<$", /[A-Za-z_][A-Za-z0-9_-]*/))),
 
     tag_class: () => token(seq(".", /[A-Za-z_][A-Za-z0-9_-]*/)),
 
@@ -406,11 +668,24 @@ module.exports = grammar({
     style_content: () => token(/[^\]\n]+/),
 
     style_property_name: () =>
-      token(choice(/--[A-Za-z0-9_-]+/, /[A-Za-z_-][A-Za-z0-9_-]*(?:@[A-Za-z0-9_-]+)?/)),
+      token(choice(/\$[A-Za-z0-9_-]+/, /--[A-Za-z0-9_-]+/, /[A-Za-z_-][A-Za-z0-9_-]*(?:@[A-Za-z0-9_-]+)?/)),
 
     css_at_keyword: () => token(seq("@", /[A-Za-z_-][A-Za-z0-9_-]*/)),
 
-    css_selector: () => token(/[.&:#%A-Za-z_][^:\n]*/),
+    css_selector: ($) => choice($.css_class_selector, $.css_element_selector),
+
+    css_class_selector: () => token(prec(1, /[.&:#%][^\s\n]+/)),
+
+    css_element_selector: () =>
+      token(
+        prec(
+          1,
+          /(?:html|body|main|section|article|aside|header|footer|nav|div|span|a|button|input|textarea|select|option|label|form|fieldset|legend|ul|li|table|thead|tbody|tr|th|td|h[1-6]|svg|path|circle|rect|line|polyline|polygon|img|canvas|video|audio|iframe|slot)(?:[.#][^\s\n]*)?/,
+        ),
+      ),
+
+    css_inline_content: () =>
+      token(prec(2, /[.&:#%A-Za-z_][^\s\n]*[ \t]+[$A-Za-z_-][A-Za-z0-9_$-]*(?:@[A-Za-z0-9_-]+)?:[^\n]+/)),
 
     css_value: () => token(/[^\n]+/),
   },

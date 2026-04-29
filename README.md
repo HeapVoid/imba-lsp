@@ -58,13 +58,13 @@ Zed language extensions use:
 - `extension.toml` for extension metadata and grammar registration
 - `languages/imba/config.toml` for language metadata
 - `languages/imba/*.scm` for Tree-sitter queries
-- optional Rust code in `src/lib.rs` compiled to WebAssembly
 
 For local development, install this repository as a Zed dev extension. The grammar registration in `extension.toml` points to this local repository with a `file://` URL. After the first commit, replace `rev = "HEAD"` with the exact commit SHA if Zed requires a stable revision.
+
+This first phase is grammar-only and intentionally has no `Cargo.toml` or Rust extension code. Adding a no-op Rust crate makes Zed try to compile WebAssembly even though no language server is registered yet.
 
 ## References
 
 - Zed language extension docs: https://zed.dev/docs/extensions/languages
 - Zed extension development docs: https://zed.dev/docs/extensions/developing-extensions
 - Local VS Code Imba extension reference: `/Users/fedor/.vscode/extensions/scrimba.vsimba-4.2.3`
-

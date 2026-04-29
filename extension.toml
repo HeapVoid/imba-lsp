@@ -8,4 +8,4 @@ repository = "https://github.com/imba/imba-lsp"
 
 [grammars.imba]
 repository = "file:///Users/fedor/Projects/modules/imba-lsp"
-rev = "9c130531455ed59dc9c4b20620f9558be5d22e1a"
+rev = "902629a8a8f4e06137f0ca44e58247df9e5b0ee8"

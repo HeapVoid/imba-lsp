@@ -1,0 +1,9 @@
+node_modules/
+build/
+parser.dylib
+*.so
+*.dylib
+*.dll
+*.wasm
+*.log
+.DS_Store

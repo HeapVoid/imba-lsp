@@ -1,0 +1,77 @@
+==================
+Tags
+==================
+
+tag app-root
+	<self>
+		<div.card @click=save name="demo" [d:flex g:8px]>
+			<span.title> title
+
+---
+
+(source_file
+  (tag_declaration
+    name: (identifier)
+    (block
+      (tag_element
+        name: (tag_name)
+        (block
+          (tag_element
+            name: (tag_name)
+            (tag_class)
+            (event_attribute
+              name: (event_name)
+              value: (attribute_value
+                (identifier)))
+            (tag_attribute
+              name: (attribute_name)
+              value: (attribute_value
+                (string)))
+            (inline_style
+              (style_content))
+            (block
+              (tag_element
+                name: (tag_name)
+                (tag_class)
+                (identifier)))))))))
+
+==================
+CSS blocks
+==================
+
+tag app-root
+	css self
+		d:flex
+		g:8px
+		.title
+			c:blue6
+		@media (max-width: 800px)
+			d:block
+
+---
+
+(source_file
+  (tag_declaration
+    name: (identifier)
+    (block
+      (css_statement
+        (css_block
+          (css_declaration
+            property: (style_property_name)
+            value: (css_value))
+          (css_declaration
+            property: (style_property_name)
+            value: (css_value))
+          (css_rule
+            selector: (css_selector)
+            (css_block
+              (css_declaration
+                property: (style_property_name)
+                value: (css_value))))
+          (css_at_rule
+            name: (css_at_keyword)
+            value: (css_value)
+            (css_block
+              (css_declaration
+                property: (style_property_name)
+                value: (css_value)))))))))

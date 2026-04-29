@@ -1,0 +1,12 @@
+id = "imba"
+name = "Imba"
+version = "0.0.1"
+schema_version = 1
+authors = ["Fedor"]
+description = "Imba language support for Zed"
+repository = "https://github.com/imba/imba-lsp"
+
+[grammars.imba]
+repository = "file:///Users/fedor/Projects/modules/imba-lsp"
+rev = "HEAD"
+

@@ -1,0 +1,84 @@
+==================
+Comments and values
+==================
+
+# hello
+let answer = 42
+let title = "Imba"
+let ready = yes
+###
+block
+comment
+###
+
+---
+
+(source_file
+  (line_comment)
+  (variable_declaration
+    name: (identifier)
+    value: (number))
+  (variable_declaration
+    name: (identifier)
+    value: (string))
+  (variable_declaration
+    name: (identifier)
+    value: (boolean))
+  (block_comment))
+
+==================
+Declarations
+==================
+
+export def greet name
+	"Hello, {name}"
+
+class Person
+	name = "Ada"
+	def greet
+		console.log("hi")
+
+tag user-card
+	name = "Ada"
+	get title
+		name
+
+---
+
+(source_file
+  (function_declaration
+    (export_modifier)
+    name: (identifier)
+    (parameter
+      name: (identifier))
+    (block
+      (expression_statement
+        (string))))
+  (class_declaration
+    name: (identifier)
+    (block
+      (assignment
+        left: (identifier)
+        right: (string))
+      (function_declaration
+        name: (identifier)
+        (block
+          (expression_statement
+            (call_expression
+              function: (member_expression
+                object: (identifier)
+                property: (identifier))
+              arguments: (arguments
+                (string))))))))
+  (tag_declaration
+    name: (identifier)
+    (block
+      (assignment
+        left: (identifier)
+        right: (string))
+      (accessor_declaration
+        name: (identifier)
+        (block
+          (expression_statement
+            (identifier)))))))
+

@@ -1,0 +1,32 @@
+{
+  "name": "tree-sitter-imba",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Tree-sitter grammar and Zed extension scaffold for Imba",
+  "type": "commonjs",
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter test",
+    "parse:sample": "tree-sitter parse examples/sample.imba"
+  },
+  "keywords": [
+    "imba",
+    "tree-sitter",
+    "zed"
+  ],
+  "devDependencies": {
+    "tree-sitter-cli": "^0.25.10"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.imba",
+      "file-types": [
+        "imba"
+      ],
+      "highlights": [
+        "languages/imba/highlights.scm"
+      ]
+    }
+  ]
+}
+

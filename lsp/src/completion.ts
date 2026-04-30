@@ -255,6 +255,10 @@ export function buildCompletionItems(
     ]);
   }
 
+  if (isTagClassContext(prefix)) {
+    return uniqueItems(symbols.classes);
+  }
+
   if (isTagContext(prefix)) {
     return uniqueItems([
       ...tagAttributes.map((attribute) =>
@@ -291,6 +295,7 @@ export function buildCompletionItems(
 }
 
 interface DocumentCompletions {
+  classes: CompletionItem[];
   general: CompletionItem[];
   members: CompletionItem[];
   tags: CompletionItem[];
@@ -303,6 +308,7 @@ function collectDocumentCompletions(
   const general = new Map<string, CompletionItem>();
   const members = new Map<string, CompletionItem>();
   const tags = new Map<string, CompletionItem>();
+  const classes = new Map<string, CompletionItem>();
 
   for (const match of source.matchAll(
     /^\t*(?:export\s+)?(?:static\s+)?(?:extend\s+)?(?:local\s+)?(?:global\s+)?(class|tag|def|get|set|prop|attr)\s+(@?[$A-Za-z_][\w$:-]*(?:\.[\w$-]+)?)/gm,
@@ -340,11 +346,40 @@ function collectDocumentCompletions(
     }
   }
 
+  for (const name of collectClassNames(source)) {
+    classes.set(name, item(name, CompletionItemKind.Class, "CSS class", "10"));
+  }
+
   return {
+    classes: [...classes.values()],
     general: [...general.values()],
     members: [...members.values()],
     tags: [...tags.values()],
   };
+}
+
+function collectClassNames(source: string): string[] {
+  const names = new Set<string>();
+
+  for (const match of source.matchAll(/(?:^|[\s,&>+~:(])\.([A-Za-z_][\w-]*)/gm)) {
+    addClassName(names, match[1]);
+  }
+
+  for (const match of source.matchAll(/<[^>\n\s]+/g)) {
+    const tagHead = match[0] ?? "";
+
+    for (const classMatch of tagHead.matchAll(/\.([A-Za-z_][\w-]*)/g)) {
+      addClassName(names, classMatch[1]);
+    }
+  }
+
+  return [...names].sort();
+}
+
+function addClassName(names: Set<string>, name: string | undefined): void {
+  if (name) {
+    names.add(name);
+  }
 }
 
 function declarationKind(keyword: string): CompletionItemKind {
@@ -374,6 +409,17 @@ function isEventContext(prefix: string): boolean {
 
 function isTagNameContext(prefix: string): boolean {
   return /<[$A-Za-z][\w$:-]*$/.test(prefix) || /<$/.test(prefix);
+}
+
+function isTagClassContext(prefix: string): boolean {
+  const tagStart = prefix.lastIndexOf("<");
+  const tagEnd = prefix.lastIndexOf(">");
+  if (tagStart <= tagEnd) return false;
+
+  const tagPrefix = prefix.slice(tagStart);
+  if (/\s/.test(tagPrefix)) return false;
+
+  return /\.[$A-Za-z_][\w-]*$/.test(tagPrefix) || /\.$/.test(tagPrefix);
 }
 
 function isTagContext(prefix: string): boolean {

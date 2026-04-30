@@ -183,6 +183,8 @@ const validSource = [
   "\t\t<div.card @click=save> \"Hi\"",
   "\tcss .card",
   "\t\tbgc:red5",
+  "\tcss .panel",
+  "\t\tc:blue5",
   "",
   "class Person",
   "\tdef greet",
@@ -331,6 +333,16 @@ async function main(): Promise<void> {
     assert.ok(tagCompletion.has("div"));
     assert.ok(tagCompletion.has("self"));
     assert.ok(tagCompletion.has("app"));
+
+    const classCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "\t\t<div."),
+      }),
+    );
+    assert.ok(classCompletion.has("card"));
+    assert.ok(classCompletion.has("panel"));
+    assert.equal(classCompletion.has("click"), false);
 
     client.notify("textDocument/didChange", {
       textDocument: {

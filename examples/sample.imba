@@ -11,10 +11,13 @@ export tag app-root
 		.title
 			c:blue6
 
+	def bad
+		return if
+
 	def save
 		console.log("save")
 
 	<self>
 		<div.card @click=save [d:flex g:8px]>
 			<span.title> title
-
+				<span> 'Hello world'

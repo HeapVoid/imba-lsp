@@ -2,17 +2,18 @@
 
 Zed-native language support for Imba.
 
-The project is intentionally split into small, verifiable layers:
+The project is intentionally split into two different parsing layers:
 
-1. `tree-sitter-imba`: a Tree-sitter grammar for parsing `.imba` files.
-2. Zed language extension metadata and Tree-sitter queries.
-3. `imba-lsp`: a later language server for diagnostics, symbols, semantic tokens, completions, hover, and navigation.
+1. A small Tree-sitter grammar that gives Zed the syntax tree it requires for editor-native highlighting, brackets, indents, and injections.
+2. `imba-lsp`, backed by the native Imba compiler/parser, for diagnostics, symbols, semantic tokens, completions, hover, and navigation.
+
+The Tree-sitter grammar is not intended to become the source of truth for the Imba language. The source of truth is the native Imba pipeline: lexer, rewriter, Jison parser, AST, and compiler result. See [docs/native-parser-analysis.md](docs/native-parser-analysis.md).
 
 The existing VS Code extension is used only as a behavioral reference. It does not ship a Tree-sitter grammar; it uses TextMate grammar plus Imba/TypeScript tooling. No VS Code extension code has been copied into this repository.
 
 ## Current Status
 
-This repository currently contains the first parser MVP:
+This repository currently contains a Zed highlighting MVP:
 
 - comments: `# ...` and `### ... ###`
 - strings: single, double, and backtick strings
@@ -23,7 +24,7 @@ This repository currently contains the first parser MVP:
 - basic Imba tags such as `<self>`, `<div.card>`, attributes, events, and inline style brackets
 - initial Zed queries for highlights, brackets, indents, outline, and CSS-block injection
 
-This is not a complete Imba parser yet. It is a grammar foundation for useful Zed highlighting and for iterating against real Imba files.
+This is not a complete Imba parser, and it should not be expanded as though it were the main semantic parser. The next phase is a Node/TypeScript LSP that calls `imba/compiler` directly and keeps the compiler result as document state.
 
 ## Development
 
@@ -71,6 +72,8 @@ This first phase is grammar-only and intentionally has no `Cargo.toml` or Rust e
 
 ## References
 
+- Native parser architecture notes: [docs/native-parser-analysis.md](docs/native-parser-analysis.md)
 - Zed language extension docs: https://zed.dev/docs/extensions/languages
 - Zed extension development docs: https://zed.dev/docs/extensions/developing-extensions
+- Imba source: https://github.com/imba/imba
 - Local VS Code Imba extension reference: `/Users/fedor/.vscode/extensions/scrimba.vsimba-4.2.3`

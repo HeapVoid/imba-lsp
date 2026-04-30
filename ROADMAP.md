@@ -1,8 +1,8 @@
 # Roadmap
 
-## Phase 1: Tree-sitter and Zed Highlighting
+## Phase 1: Tree-sitter and Zed Highlighting Shell
 
-Goal: useful Zed-native syntax highlighting and structure support for `.imba` files.
+Goal: useful Zed-native syntax highlighting and structure support for `.imba` files, without pretending Tree-sitter is the semantic source of truth.
 
 - [x] Create project README and roadmap.
 - [x] Add a Tree-sitter grammar skeleton.
@@ -10,37 +10,40 @@ Goal: useful Zed-native syntax highlighting and structure support for `.imba` fi
 - [x] Add corpus coverage for comments, declarations, tags, CSS, imports, and control flow.
 - [x] Add initial Zed language config and query files.
 - [x] Run the grammar against real Imba files from local projects and collect parse errors.
-- [ ] Expand tag parsing for named refs, dynamic tags, conditional classes, and richer attribute values. Initial support exists for dynamic class bindings and richer attribute calls/subscripts.
-- [ ] Expand expression parsing for ranges, postfix modifiers, `do` callbacks, object-literal `def`, and Imba-specific operators. Initial support exists for `do` callbacks, typed params/fields, ternaries, regex literals, `typeof`/`instanceof`, `for own`, spread arrays, and update/shift operators.
-- [ ] Improve CSS block parsing and injection boundaries. Initial support exists for CSS comments, selector lists, custom selectors, nested inline rules, and `@keyframes`.
-- [ ] Add textobjects and better outline queries.
+- [ ] Keep the grammar conservative and recovery-friendly.
+- [ ] Fix highlighting regressions when they block real editing.
+- [ ] Avoid large grammar-expansion work unless it is needed for Zed queries.
 
-## Phase 2: Zed Extension Hardening
+## Phase 2: Native Compiler Analysis
 
-Goal: installable local Zed dev extension with stable highlighting behavior.
+Goal: base the real language features on Imba's own parser/compiler instead of a hand-written duplicate grammar.
 
-- [x] Verify local dev-extension install in Zed.
-- [ ] Replace local `file://` grammar reference with a publishable repository URL and exact revision.
-- [ ] Add a license before publishing to Zed's extension registry.
-- [ ] Test highlighting, brackets, indents, and outline in real Zed buffers. Initial highlighting smoke test passed in Zed.
-- [ ] Add regression samples for parser bugs found in real code.
+- [x] Verify that the native parser is generated from Imba's Jison grammar.
+- [x] Verify the compiler pipeline: lexer, rewriter, parser, AST, compiler result.
+- [x] Verify that `imba/compiler` exposes `tokenize`, `rewrite`, `parse`, and `compile`.
+- [x] Verify that compiler diagnostics include source ranges.
+- [ ] Probe compiler output on a corpus of real local `.imba` files.
+- [ ] Document the compiler API surface that the LSP will depend on.
 
 ## Phase 3: `imba-lsp` MVP
 
-Goal: a small Node/TypeScript LSP that makes Zed useful beyond syntax highlighting.
+Goal: a small Node/TypeScript LSP that calls native `imba/compiler` and makes Zed useful beyond syntax highlighting.
 
 - [ ] Scaffold `imba-lsp`.
 - [ ] Implement `initialize`, document sync, and shutdown.
-- [ ] Publish diagnostics from the Imba compiler.
-- [ ] Implement `textDocument/documentSymbol`, using `imba-monarch` behavior as reference.
-- [ ] Implement `textDocument/semanticTokens/full`.
+- [ ] Resolve the workspace-local `imba/compiler`, with a pinned fallback dependency.
+- [ ] Compile open documents with debounce and cache the result per document version.
+- [ ] Publish diagnostics from `compilation.diagnostics`.
+- [ ] Keep `ast`, `tokens`, `js`, `css`, and `locs.spans` in document state.
+- [ ] Implement `textDocument/documentSymbol` from native program/AST data, with the existing fast outline scanner as fallback.
+- [ ] Implement `textDocument/semanticTokens/full` from Imba program tokens.
 - [ ] Add Zed language-server registration.
 
 ## Phase 4: TypeScript-Aware Features
 
 Goal: completion, hover, and navigation that understand compiled Imba output.
 
-- [ ] Reuse Imba compiler output and source maps/loc spans.
+- [ ] Reuse Imba compiler output and `locs.spans`.
 - [ ] Create or embed a TypeScript LanguageService bridge.
 - [ ] Implement completion with Imba-aware post-processing.
 - [ ] Implement hover and go-to-definition with position mapping.
@@ -48,8 +51,11 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 
 ## Known Risks
 
-- Imba's indentation and tag syntax are not JavaScript-shaped; grammar error recovery will need real-world samples.
-- Current real-world parser smoke set is 91 local `.imba` files; this iteration parses 37 cleanly and uses the remaining failures as the next grammar backlog.
+- Zed still requires a Tree-sitter grammar for built-in syntax highlighting and query-based editor features.
+- Native Imba parsing depends on the full lexer/rewriter/parser pipeline; duplicating only the grammar will be wrong.
+- The public compiler API is usable, but we need to pin the Imba version and watch for compiler API drift.
+- Compiler work may need debounce or worker-thread isolation for large files.
 - VS Code completions depend on a custom bridge, while the TypeScript plugin's standard `getCompletionsAtPosition` currently returns `null`.
-- CSS in Imba is its own compiled DSL, not raw CSS; Tree-sitter injection should start conservative.
+- Completion, hover, and go-to-definition require TypeScript LanguageService integration plus Imba-to-compiled-output position mapping.
+- CSS in Imba is its own compiled DSL, not raw CSS; Zed injection should stay conservative.
 - Zed extension publishing requires a valid accepted license for extension code.

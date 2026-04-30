@@ -11,7 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "probe": "npm run build && node dist/src/probe.js",
     "start": "node dist/src/server.js --stdio",
-    "test": "npm run build && node dist/test/diagnostics.test.js && node dist/test/source-map.test.js && node dist/test/protocol.test.js && node dist/src/probe.js test/fixtures --fail-on-diagnostics"
+    "test": "npm run build && node dist/test/diagnostics.test.js && node dist/test/source-map.test.js && node dist/test/typescript-diagnostics.test.js && node dist/test/protocol.test.js && node dist/src/probe.js test/fixtures --fail-on-diagnostics"
   },
   "dependencies": {
     "imba": "2.0.0-alpha.247",

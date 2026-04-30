@@ -1,21 +1,45 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   DiagnosticSeverity,
   type Diagnostic,
 } from "vscode-languageserver/node";
-import type { TextDocument } from "vscode-languageserver-textdocument";
+import { TextDocument } from "vscode-languageserver-textdocument";
 import * as ts from "typescript";
 import type { ImbaCompilation } from "./compiler";
 import { generatedOffsetToSourceOffset } from "./source-map";
-import { createTypeScriptLanguageService } from "./typescript-service";
+import {
+  createTypeScriptLanguageService,
+  virtualImbaFilesFor,
+} from "./typescript-service";
+
+export interface TypeScriptDiagnosticGroup {
+  diagnostics: Diagnostic[];
+  source: string;
+  sourcePath: string;
+  uri: string;
+}
+
+export interface TypeScriptDiagnosticGroups {
+  current: Diagnostic[];
+  imported: TypeScriptDiagnosticGroup[];
+}
 
 export function buildTypeScriptDiagnostics(
   document: TextDocument,
   sourcePath: string | null,
   compilation: ImbaCompilation | undefined,
 ): Diagnostic[] {
+  return buildTypeScriptDiagnosticGroups(document, sourcePath, compilation).current;
+}
+
+export function buildTypeScriptDiagnosticGroups(
+  document: TextDocument,
+  sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
+): TypeScriptDiagnosticGroups {
   const generated = compilation?.js;
-  if (!generated) return [];
+  if (!generated) return { current: [], imported: [] };
 
   const source = document.getText();
   const fileName = `${sourcePath ?? path.join(process.cwd(), "untitled.imba")}.compiled.js`;
@@ -25,6 +49,52 @@ export function buildTypeScriptDiagnostics(
       noEmit: true,
     },
   });
+
+  const current = mapDiagnosticsForFile(
+    service,
+    fileName,
+    generated,
+    document,
+    source,
+    compilation,
+  );
+  const imported = virtualImbaFilesFor(service).map(([virtualPath, virtualFile]) => {
+    const virtualSource = virtualFile.source;
+    const virtualDocument = TextDocument.create(
+      pathToFileURL(virtualFile.sourcePath).toString(),
+      "imba",
+      0,
+      virtualSource,
+    );
+
+    return {
+      diagnostics: mapDiagnosticsForFile(
+        service,
+        virtualPath,
+        virtualFile.compilation.js ?? "",
+        virtualDocument,
+        virtualSource,
+        virtualFile.compilation,
+      ),
+      source: virtualSource,
+      sourcePath: virtualFile.sourcePath,
+      uri: virtualDocument.uri,
+    };
+  });
+
+  return { current, imported };
+}
+
+function mapDiagnosticsForFile(
+  service: ts.LanguageService,
+  fileName: string,
+  generated: string,
+  document: TextDocument,
+  source: string,
+  compilation: ImbaCompilation,
+): Diagnostic[] {
+  if (!generated) return [];
+
   const diagnostics = [
     ...service.getSyntacticDiagnostics(fileName),
     ...service.getSemanticDiagnostics(fileName),

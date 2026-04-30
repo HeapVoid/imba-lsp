@@ -64,9 +64,10 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 - [x] Decode compiler-mangled Imba member names in TypeScript completions.
 - [x] Decode compiler-mangled Imba member names in TypeScript hover/go-to-definition.
 - [x] Add basic preceding-comment extraction for Imba hovers.
+- [x] Map TypeScript diagnostics for imported virtual `.imba` modules and publish them for matching open documents.
 - [ ] Expand completion with richer Imba-aware post-processing for generated JS names.
 - [ ] Expand docs extraction beyond directly preceding `#` comments.
-- [ ] Expand TypeScript diagnostics to project/imported `.imba` files without noisy duplicate publishes.
+- [ ] Expand TypeScript diagnostics to unopened project/imported `.imba` files without noisy duplicate publishes.
 - [ ] Port useful codefix behavior from `typescript-imba-plugin` as reference, with license checks before copying anything.
 
 ## Known Risks

@@ -3,6 +3,7 @@ import {
   DiagnosticSeverity,
   ProposedFeatures,
   TextDocumentSyncKind,
+  type Diagnostic,
   type InitializeParams,
   type InitializeResult,
 } from "vscode-languageserver/node";
@@ -17,7 +18,10 @@ import {
   semanticTokenTypes,
 } from "./semantic-tokens";
 import { buildDocumentSymbols } from "./symbols";
-import { buildTypeScriptDiagnostics } from "./typescript-diagnostics";
+import {
+  buildTypeScriptDiagnosticGroups,
+  type TypeScriptDiagnosticGroup,
+} from "./typescript-diagnostics";
 import { filePathFromUri } from "./uri";
 
 const validationDelayMs = 120;
@@ -32,6 +36,7 @@ interface DocumentState {
 
 const documentState = new Map<string, DocumentState>();
 const pendingValidation = new Map<string, NodeJS.Timeout>();
+const publishedDiagnostics = new Map<string, string>();
 
 connection.onInitialize((_params: InitializeParams): InitializeResult => ({
   capabilities: {
@@ -72,6 +77,7 @@ documents.onDidSave((event) => {
 documents.onDidClose((event) => {
   clearPendingValidation(event.document.uri);
   documentState.delete(event.document.uri);
+  publishedDiagnostics.delete(event.document.uri);
   connection.sendDiagnostics({
     uri: event.document.uri,
     diagnostics: [],
@@ -84,6 +90,7 @@ connection.onShutdown(() => {
   }
 
   documentState.clear();
+  publishedDiagnostics.clear();
 });
 
 connection.languages.semanticTokens.on((params) => {
@@ -163,18 +170,19 @@ function validateNow(document: TextDocument): CompileResult {
 
   const state = currentState(document);
   const sourcePath = filePathFromUri(document.uri);
-  const diagnostics = hasCompilerErrors(state.result)
+  const hasCompilerError = hasCompilerErrors(state.result);
+  const typeScriptDiagnostics = hasCompilerError
+    ? { current: [], imported: [] }
+    : buildTypeScriptDiagnosticGroups(document, sourcePath, state.result.compilation);
+  const diagnostics = hasCompilerError
     ? state.result.diagnostics
     : [
         ...state.result.diagnostics,
-        ...buildTypeScriptDiagnostics(document, sourcePath, state.result.compilation),
+        ...typeScriptDiagnostics.current,
       ];
 
-  connection.sendDiagnostics({
-    uri: document.uri,
-    version: document.version,
-    diagnostics,
-  });
+  publishDiagnostics(document.uri, document.version, diagnostics);
+  publishOpenImportedDiagnostics(document.uri, typeScriptDiagnostics.imported);
 
   return state.result;
 }
@@ -211,6 +219,45 @@ function clearPendingValidation(uri: string): void {
     clearTimeout(timer);
     pendingValidation.delete(uri);
   }
+}
+
+function publishOpenImportedDiagnostics(
+  ownerUri: string,
+  groups: TypeScriptDiagnosticGroup[],
+): void {
+  for (const group of groups) {
+    if (group.uri === ownerUri) continue;
+
+    const document = documents.get(group.uri);
+    if (!document) continue;
+    if (document.getText() !== group.source) continue;
+
+    const state = currentState(document);
+    const diagnostics = hasCompilerErrors(state.result)
+      ? state.result.diagnostics
+      : [
+          ...state.result.diagnostics,
+          ...group.diagnostics,
+        ];
+
+    publishDiagnostics(document.uri, document.version, diagnostics);
+  }
+}
+
+function publishDiagnostics(
+  uri: string,
+  version: number | undefined,
+  diagnostics: Diagnostic[],
+): void {
+  const key = JSON.stringify({ diagnostics, version });
+  if (publishedDiagnostics.get(uri) === key) return;
+
+  publishedDiagnostics.set(uri, key);
+  connection.sendDiagnostics({
+    uri,
+    version,
+    diagnostics,
+  });
 }
 
 documents.listen(connection);

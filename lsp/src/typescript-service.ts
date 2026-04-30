@@ -91,6 +91,12 @@ export function virtualImbaFileFor(
   return virtualImbaFilesByService.get(service)?.get(fileName);
 }
 
+export function virtualImbaFilesFor(
+  service: ts.LanguageService,
+): Array<[string, VirtualImbaFile]> {
+  return [...(virtualImbaFilesByService.get(service)?.entries() ?? [])];
+}
+
 interface ProjectConfig {
   compilerOptions: ts.CompilerOptions;
   currentDirectory: string;

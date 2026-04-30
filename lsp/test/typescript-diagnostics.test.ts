@@ -13,6 +13,7 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), "imba-lsp-ts-diagnostics-"));
 try {
   const appPath = path.join(root, "app.imba");
   const profilePath = path.join(root, "profile.imba");
+  const runtimePath = path.join(root, "runtime.imba");
   const appSource = [
     "import {Profile} from './profile.imba'",
     "let profile = new Profile",
@@ -52,6 +53,36 @@ try {
   assert.ok(diagnostic, "expected imported TypeScript diagnostic");
   assert.equal(imported.uri, pathToFileURL(profilePath).toString());
   assert.equal(rangeText(imported.source, diagnostic.range), "toUpperCase");
+
+  const runtimeSource = [
+    "tag card",
+    "\tdef mount",
+    "\t\tself.querySelector('canvas')",
+    "\tdef close",
+    "\t\treturn true",
+    "\tdef render",
+    "\t\t<self ease @click=close>",
+    "\t\t\t<span> data.name",
+    "",
+  ].join("\n");
+  const runtimeDocument = TextDocument.create(
+    pathToFileURL(runtimePath).toString(),
+    "imba",
+    1,
+    runtimeSource,
+  );
+  const runtimeResult = compileImba(runtimeSource, runtimePath, {
+    sourcemap: true,
+  });
+  assert.equal(runtimeResult.diagnostics.length, 0);
+  assert.deepEqual(
+    buildTypeScriptDiagnosticGroups(
+      runtimeDocument,
+      runtimePath,
+      runtimeResult.compilation,
+    ).current,
+    [],
+  );
 } finally {
   fs.rmSync(root, { force: true, recursive: true });
 }

@@ -41,6 +41,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - cross-file TypeScript hover for imported `.imba` symbols prefers the original Imba declaration and suppresses weak `any` hovers
 - initial TypeScript diagnostics for the open `.imba` document, mapped back from compiled JS through native source spans
 - TypeScript diagnostics are also mapped for imported virtual `.imba` modules and published for matching open documents
+- TypeScript diagnostics filter known generated Imba runtime/tag/CSS false positives and can be checked by `lsp:probe -- --typescript-diagnostics`
 
 The Tree-sitter grammar is not a complete Imba parser, and it should not be expanded as though it were the main semantic parser. The LSP calls `imba/compiler` directly and keeps the compiler result as document state.
 
@@ -97,7 +98,7 @@ Probe the LSP adapters against real `.imba` files:
 npm run lsp:probe -- /path/to/imba/project
 ```
 
-The probe compiles every `.imba` file under the target path, builds semantic tokens, builds document symbols, reports diagnostics, and fails only on runtime failures. Add `--fail-on-diagnostics` when the target is expected to be clean.
+The probe compiles every `.imba` file under the target path, builds semantic tokens, builds document symbols, reports diagnostics, and fails only on runtime failures. Add `--fail-on-diagnostics` when the target is expected to be clean. Add `--typescript-diagnostics` to include mapped TypeScript diagnostics in the diagnostic counts.
 
 Run the language server over stdio:
 

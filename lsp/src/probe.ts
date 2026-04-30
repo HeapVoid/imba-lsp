@@ -4,20 +4,24 @@ import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { compileImba } from "./compiler";
+import { compileImba, type CompileResult } from "./compiler";
 import { buildSemanticTokenData } from "./semantic-tokens";
 import { buildDocumentSymbols } from "./symbols";
+import { buildTypeScriptDiagnostics } from "./typescript-diagnostics";
 
 interface ProbeOptions {
   failOnDiagnostics: boolean;
   json: boolean;
   targets: string[];
+  typescriptDiagnostics: boolean;
 }
 
 interface ProbeResult {
   path: string;
+  compilerDiagnostics: number;
   diagnostics: number;
   errors: number;
+  typeScriptDiagnostics: number;
   warnings: number;
   semanticTokens: number;
   symbols: number;
@@ -51,7 +55,7 @@ async function main(): Promise<void> {
   const results: ProbeResult[] = [];
 
   for (const file of files) {
-    results.push(await probeFile(file));
+    results.push(await probeFile(file, options));
   }
 
   if (options.json) {
@@ -72,12 +76,15 @@ function parseArgs(args: string[]): ProbeOptions {
   const targets: string[] = [];
   let failOnDiagnostics = false;
   let json = false;
+  let typescriptDiagnostics = false;
 
   for (const arg of args) {
     if (arg === "--fail-on-diagnostics") {
       failOnDiagnostics = true;
     } else if (arg === "--json") {
       json = true;
+    } else if (arg === "--typescript-diagnostics" || arg === "--ts-diagnostics") {
+      typescriptDiagnostics = true;
     } else if (arg === "--help" || arg === "-h") {
       printHelp();
       process.exit(0);
@@ -90,12 +97,13 @@ function parseArgs(args: string[]): ProbeOptions {
     failOnDiagnostics,
     json,
     targets: targets.length > 0 ? targets : [process.cwd()],
+    typescriptDiagnostics,
   };
 }
 
 function printHelp(): void {
   console.log([
-    "Usage: imba-lsp-probe [--json] [--fail-on-diagnostics] <file-or-directory>...",
+    "Usage: imba-lsp-probe [--json] [--typescript-diagnostics] [--fail-on-diagnostics] <file-or-directory>...",
     "",
     "Compiles .imba files with the native Imba compiler and exercises the LSP",
     "diagnostics, semantic-token, and document-symbol adapters.",
@@ -136,22 +144,33 @@ async function collectTarget(target: string, files: Set<string>): Promise<void> 
   }
 }
 
-async function probeFile(file: string): Promise<ProbeResult> {
+async function probeFile(file: string, options: ProbeOptions): Promise<ProbeResult> {
   const started = performance.now();
 
   try {
     const source = await fs.readFile(file, "utf8");
     const uri = pathToFileURL(file).toString();
     const document = TextDocument.create(uri, "imba", 1, source);
-    const result = compileImba(source, file);
+    const result = compileImba(source, file, {
+      sourcemap: options.typescriptDiagnostics,
+    });
+    const typeScriptDiagnostics = options.typescriptDiagnostics && !hasCompilerErrors(result)
+      ? buildTypeScriptDiagnostics(document, file, result.compilation)
+      : [];
+    const diagnostics = [
+      ...result.diagnostics,
+      ...typeScriptDiagnostics,
+    ];
     const semanticTokens = buildSemanticTokenData(document, result.compilation);
     const symbols = buildDocumentSymbols(document, file);
 
     return {
       path: file,
-      diagnostics: result.diagnostics.length,
-      errors: result.diagnostics.filter((diagnostic) => diagnostic.severity === DiagnosticSeverity.Error).length,
-      warnings: result.diagnostics.filter((diagnostic) => diagnostic.severity === DiagnosticSeverity.Warning).length,
+      compilerDiagnostics: result.diagnostics.length,
+      diagnostics: diagnostics.length,
+      errors: diagnostics.filter((diagnostic) => diagnostic.severity === DiagnosticSeverity.Error).length,
+      typeScriptDiagnostics: typeScriptDiagnostics.length,
+      warnings: diagnostics.filter((diagnostic) => diagnostic.severity === DiagnosticSeverity.Warning).length,
       semanticTokens: semanticTokens.length / 5,
       symbols: countSymbols(symbols),
       compilerPath: result.compilerPath,
@@ -161,8 +180,10 @@ async function probeFile(file: string): Promise<ProbeResult> {
   } catch (error) {
     return {
       path: file,
+      compilerDiagnostics: 0,
       diagnostics: 0,
       errors: 0,
+      typeScriptDiagnostics: 0,
       warnings: 0,
       semanticTokens: 0,
       symbols: 0,
@@ -189,8 +210,10 @@ function countSymbols(symbols: Array<{ children?: unknown[] }>): number {
 function summary(results: ProbeResult[]): Record<string, unknown> {
   return {
     files: results.length,
+    compilerDiagnostics: results.reduce((count, result) => count + result.compilerDiagnostics, 0),
     diagnostics: results.reduce((count, result) => count + result.diagnostics, 0),
     errors: results.reduce((count, result) => count + result.errors, 0),
+    typeScriptDiagnostics: results.reduce((count, result) => count + result.typeScriptDiagnostics, 0),
     warnings: results.reduce((count, result) => count + result.warnings, 0),
     failures: results.filter((result) => result.failure).length,
     elapsedMs: results.reduce((count, result) => count + result.elapsedMs, 0),
@@ -221,6 +244,8 @@ function printSummary(results: ProbeResult[]): void {
         result.diagnostics === 0 ? "ok" : "diag",
         displayPath(result.path),
         `diagnostics=${result.diagnostics}`,
+        `compilerDiagnostics=${result.compilerDiagnostics}`,
+        `tsDiagnostics=${result.typeScriptDiagnostics}`,
         `tokens=${result.semanticTokens}`,
         `symbols=${result.symbols}`,
         `compiler=${result.workspaceLocal ? "workspace" : "fallback"}`,
@@ -243,4 +268,11 @@ function printSummary(results: ProbeResult[]): void {
 
 function displayPath(file: string): string {
   return path.relative(process.cwd(), file) || path.basename(file);
+}
+
+function hasCompilerErrors(result: CompileResult): boolean {
+  return result.diagnostics.some((diagnostic) =>
+    diagnostic.severity === undefined ||
+    diagnostic.severity === DiagnosticSeverity.Error
+  );
 }

@@ -9,6 +9,7 @@ import { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { buildCompletionItems, completionTriggerCharacters } from "./completion";
 import { compileImba, type CompileResult } from "./compiler";
+import { buildDefinitionLocations, buildHover } from "./navigation";
 import {
   buildSemanticTokenData,
   semanticTokenModifiers,
@@ -41,6 +42,8 @@ connection.onInitialize((_params: InitializeParams): InitializeResult => ({
       full: true,
     },
     documentSymbolProvider: true,
+    definitionProvider: true,
+    hoverProvider: true,
     completionProvider: {
       triggerCharacters: [...completionTriggerCharacters],
       resolveProvider: false,
@@ -111,6 +114,20 @@ connection.onCompletion((params) => {
     filePathFromUri(document.uri),
     compilation,
   );
+});
+
+connection.onDefinition((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return [];
+
+  return buildDefinitionLocations(document, params.position);
+});
+
+connection.onHover((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return null;
+
+  return buildHover(document, params.position);
 });
 
 function scheduleValidation(document: TextDocument): void {

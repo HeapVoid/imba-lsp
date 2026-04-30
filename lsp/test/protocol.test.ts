@@ -226,12 +226,16 @@ async function main(): Promise<void> {
         completionProvider?: {
           triggerCharacters?: string[];
         };
+        definitionProvider?: boolean;
         documentSymbolProvider?: boolean;
+        hoverProvider?: boolean;
         semanticTokensProvider?: unknown;
       };
     };
 
     assert.equal(initialize.capabilities?.documentSymbolProvider, true);
+    assert.equal(initialize.capabilities?.definitionProvider, true);
+    assert.equal(initialize.capabilities?.hoverProvider, true);
     assert.ok(initialize.capabilities?.semanticTokensProvider);
     assert.ok(initialize.capabilities?.completionProvider);
     assert.ok(initialize.capabilities.completionProvider.triggerCharacters?.includes("."));
@@ -285,6 +289,32 @@ async function main(): Promise<void> {
     assert.ok(
       symbols.find((symbol) => symbol.name === "app")?.children?.some((child) => child.name === "render"),
     );
+
+    const saveDefinition = locationTexts(
+      validSource,
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "@click=save"),
+      }),
+    );
+    assert.ok(saveDefinition.has("save"));
+
+    const greetDefinition = locationTexts(
+      validSource,
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "person.greet"),
+      }),
+    );
+    assert.ok(greetDefinition.has("greet"));
+
+    const greetHover = hoverText(
+      await client.request("textDocument/hover", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "person.greet"),
+      }),
+    );
+    assert.match(greetHover, /Imba method `Person\.greet`/);
 
     const semanticTokens = (await client.request("textDocument/semanticTokens/full", {
       textDocument: { uri },
@@ -429,6 +459,28 @@ function completionLabels(result: unknown): Set<string> {
   );
 }
 
+function locationTexts(source: string, result: unknown): Set<string> {
+  const locations = Array.isArray(result) ? result : result ? [result] : [];
+  return new Set(
+    locations
+      .map((location) => (location as { range?: LspRange }).range)
+      .filter((range): range is LspRange => Boolean(range))
+      .map((range) => rangeText(source, range)),
+  );
+}
+
+function hoverText(result: unknown): string {
+  const contents = (result as { contents?: unknown } | null)?.contents;
+  if (typeof contents === "string") return contents;
+  if (Array.isArray(contents)) return contents.join("\n");
+  if (contents && typeof contents === "object") {
+    const value = (contents as { value?: unknown }).value;
+    return typeof value === "string" ? value : "";
+  }
+
+  return "";
+}
+
 function semanticTokenTexts(source: string, data: number[]): Set<string> {
   const lines = source.split("\n");
   const texts = new Set<string>();
@@ -456,6 +508,21 @@ function semanticTokenTexts(source: string, data: number[]): Set<string> {
   return texts;
 }
 
+interface LspRange {
+  start: {
+    line: number;
+    character: number;
+  };
+  end: {
+    line: number;
+    character: number;
+  };
+}
+
+function rangeText(source: string, range: LspRange): string {
+  return source.slice(offsetAtPosition(source, range.start), offsetAtPosition(source, range.end));
+}
+
 function positionBefore(source: string, needle: string): { line: number; character: number } {
   const offset = source.indexOf(needle);
   assert.notEqual(offset, -1, `missing source needle ${JSON.stringify(needle)}`);
@@ -476,4 +543,18 @@ function positionAtOffset(source: string, offset: number): { line: number; chara
     line: lines.length - 1,
     character: lines[lines.length - 1].length,
   };
+}
+
+function offsetAtPosition(
+  source: string,
+  position: { line: number; character: number },
+): number {
+  const lines = source.split("\n");
+  let offset = 0;
+
+  for (let line = 0; line < position.line; line++) {
+    offset += (lines[line] ?? "").length + 1;
+  }
+
+  return offset + position.character;
 }

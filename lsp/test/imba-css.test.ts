@@ -21,6 +21,10 @@ const source = [
   "\t\tbc:var(--text-primary)",
   "\t\tff:sans",
   "\t\tbxs:none",
+  "\t\t&.small",
+  "\t\t\t.nav-menu",
+  "\t\t\t\t",
+  "\t\t\t\tbgc:red5",
   "",
 ].join("\n");
 const workspaceTokens = collectCssTokensFromSource(
@@ -96,6 +100,16 @@ assert.equal(fontValueCompletion.has("$surface"), false);
 const shadowValueCompletion = completionLabels(positionBefore("none"));
 assert.ok(shadowValueCompletion.has("$shadow-card"));
 assert.equal(shadowValueCompletion.has("$surface"), false);
+
+const nestedPropertyCompletion = completionLabels(positionAfter("\t\t&.small\n\t\t\t.nav-menu\n\t\t\t\t"));
+assert.ok(nestedPropertyCompletion.has("bgc"));
+assert.ok(nestedPropertyCompletion.has("maw"));
+
+const nestedColorValueCompletion = completionLabels(positionAfter("\t\t\t\tbgc:"));
+assert.ok(nestedColorValueCompletion.has("gray9"));
+assert.ok(nestedColorValueCompletion.has("$surface"));
+
+assert.equal(buildCssCompletionItems(document, positionAfter("def render"), null, workspaceTokens), null);
 
 const modifierCompletion = completionLabels(positionAfter("bg@"));
 assert.ok(modifierCompletion.has("@hover"));

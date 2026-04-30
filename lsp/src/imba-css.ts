@@ -810,7 +810,8 @@ function isCssContext(source: string, position: Position, prefix: string): boole
   if (isInlineStyleContext(source, position)) return true;
 
   const lines = source.split("\n");
-  const currentIndent = indentOf(lines[position.line] ?? "");
+  const currentIndent = indentOf(prefix || lines[position.line] || "");
+  let ancestorIndent = currentIndent;
 
   for (let line = position.line; line >= 0; line--) {
     const text = lines[line] ?? "";
@@ -820,12 +821,24 @@ function isCssContext(source: string, position: Position, prefix: string): boole
     const trimmed = text.trim();
 
     if (/^(?:global\s+)?css(?:\s|$)/.test(trimmed)) {
-      return line === position.line || indent < currentIndent;
+      return line === position.line || indent < ancestorIndent;
     }
 
-    if (indent < currentIndent) return false;
+    if (indent < ancestorIndent) {
+      if (!isCssAncestorLine(trimmed)) return false;
+      ancestorIndent = indent;
+    }
   }
 
+  return false;
+}
+
+function isCssAncestorLine(trimmed: string): boolean {
+  if (!trimmed) return true;
+  if (trimmed.startsWith("#")) return true;
+  if (/^@[A-Za-z_-][A-Za-z0-9_-]*(?:\s|$)/.test(trimmed)) return true;
+  if (/^[.&:#%][^\s]+(?:\s+.*)?$/.test(trimmed)) return true;
+  if (/^[A-Za-z][A-Za-z0-9_-]*(?:[.#:%][^\s]*)?(?:\s+.*)?$/.test(trimmed)) return true;
   return false;
 }
 

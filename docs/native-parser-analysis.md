@@ -119,7 +119,7 @@ This is not recommended now.
 3. Add a document store that compiles on open/change with debounce.
 4. Publish diagnostics from compiler results.
 5. Add a corpus probe that compiles local real-world `.imba` files and records timing/diagnostic shape.
-6. Implement document symbols from native program/AST data, falling back to the existing fast outline strategy if needed.
+6. Implement document symbols from native `imba/program` outline data, falling back to a local fast outline strategy if needed.
 7. Implement semantic tokens from Imba program tokens and encode them for `textDocument/semanticTokens/full`.
 8. Register the LSP in the Zed extension.
 9. Start the TypeScript LanguageService bridge for completion, hover, and definition.

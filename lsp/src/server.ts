@@ -13,6 +13,7 @@ import {
   semanticTokenModifiers,
   semanticTokenTypes,
 } from "./semantic-tokens";
+import { buildDocumentSymbols } from "./symbols";
 import { filePathFromUri } from "./uri";
 
 const validationDelayMs = 120;
@@ -33,6 +34,7 @@ connection.onInitialize((_params: InitializeParams): InitializeResult => ({
       },
       full: true,
     },
+    documentSymbolProvider: true,
   },
   serverInfo: {
     name: "imba-lsp",
@@ -78,6 +80,13 @@ connection.languages.semanticTokens.on((params) => {
   return {
     data: buildSemanticTokenData(document, state.compilation),
   };
+});
+
+connection.onDocumentSymbol((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return [];
+
+  return buildDocumentSymbols(document, filePathFromUri(document.uri));
 });
 
 function scheduleValidation(document: TextDocument): void {

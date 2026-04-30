@@ -71,6 +71,8 @@ Run the LSP smoke tests:
 npm run lsp:test
 ```
 
+The LSP tests include a protocol-level stdio smoke test. It starts the built server, sends `initialize`, `didOpen`, `didChange`, `textDocument/documentSymbol`, and `textDocument/semanticTokens/full`, and verifies diagnostics/symbols/tokens without requiring Zed.
+
 Run the language server over stdio:
 
 ```sh
@@ -92,8 +94,6 @@ Zed language extensions use:
 - `languages/imba/*.scm` for Tree-sitter queries
 
 For local development, install this repository as a Zed dev extension. The grammar registration in `extension.toml` points to this local repository with a `file://` URL and an exact commit SHA. Zed does not accept `rev = "HEAD"` for this local grammar checkout path.
-
-This first phase is grammar-only and intentionally has no `Cargo.toml` or Rust extension code. Adding a no-op Rust crate makes Zed try to compile WebAssembly even though no language server is registered yet.
 
 The LSP is registered in the Zed extension through the Rust adapter in `src/lib.rs`. For local dev-extension testing, build the LSP before reinstalling the extension:
 

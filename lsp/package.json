@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/server.js --stdio",
-    "test": "npm run build && node dist/test/diagnostics.test.js"
+    "test": "npm run build && node dist/test/diagnostics.test.js && node dist/test/protocol.test.js"
   },
   "dependencies": {
     "imba": "2.0.0-alpha.247",

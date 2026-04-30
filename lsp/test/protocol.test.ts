@@ -346,6 +346,30 @@ async function main(): Promise<void> {
     assert.ok(importedProfileDefinition, "expected class definition in imported profile.imba");
     assert.equal(locationText(validSource, uri, importedProfileDefinition), "Profile");
 
+    const importedProfileSpecifierDefinition = locations(
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "import {Profile"),
+      }),
+    ).find((location) => location.uri.endsWith("/project/profile.imba"));
+    assert.ok(
+      importedProfileSpecifierDefinition,
+      "expected import specifier definition in imported profile.imba",
+    );
+    assert.equal(locationText(validSource, uri, importedProfileSpecifierDefinition), "Profile");
+
+    const importedProfilePathDefinition = locations(
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "./project/profile.imba"),
+      }),
+    ).find((location) => location.uri.endsWith("/project/profile.imba"));
+    assert.ok(
+      importedProfilePathDefinition,
+      "expected import path definition in imported profile.imba",
+    );
+    assert.equal(locationText(validSource, uri, importedProfilePathDefinition), "Profile");
+
     const importedReadyDefinition = locations(
       await client.request("textDocument/definition", {
         textDocument: { uri },

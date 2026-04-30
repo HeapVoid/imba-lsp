@@ -28,6 +28,17 @@ interface ExpressionContext {
   tokenRange: Range;
 }
 
+interface SourceRange {
+  endOffset: number;
+  startOffset: number;
+}
+
+interface ImbaDeclarationCandidate extends SourceRange {
+  exported: boolean;
+  name: string;
+  topLevel: boolean;
+}
+
 const imbaExpressionPattern =
   /^[$A-Za-z_][\w$?!-]*(?:(?:\.|\?\.)[$A-Za-z_][\w$?!-]*)*$/;
 
@@ -189,7 +200,8 @@ function virtualImbaHover(
     const virtualFile = virtualImbaFileFor(service, definition.fileName);
     if (!virtualFile) continue;
 
-    const sourceRange = sourceRangeForVirtualImbaDefinition(virtualFile, definition);
+    const sourceRange = sourceRangeForVirtualImbaDefinition(virtualFile, definition) ??
+      fallbackSourceRangeForVirtualImbaDefinition(virtualFile, definition);
     if (!sourceRange) continue;
 
     const declaration = declarationLineAtOffset(virtualFile.source, sourceRange.startOffset);
@@ -373,7 +385,8 @@ function locationForVirtualImbaDefinition(
   virtualFile: VirtualImbaFile,
   definition: ts.DefinitionInfo,
 ): Location {
-  const sourceRange = sourceRangeForVirtualImbaDefinition(virtualFile, definition);
+  const sourceRange = sourceRangeForVirtualImbaDefinition(virtualFile, definition) ??
+    fallbackSourceRangeForVirtualImbaDefinition(virtualFile, definition);
   if (!sourceRange) {
     return Location.create(
       pathToFileURL(virtualFile.sourcePath).toString(),
@@ -393,7 +406,7 @@ function locationForVirtualImbaDefinition(
 function sourceRangeForVirtualImbaDefinition(
   virtualFile: VirtualImbaFile,
   definition: ts.DefinitionInfo,
-): { endOffset: number; startOffset: number } | null {
+): SourceRange | null {
   const start = generatedOffsetToSourceOffset(
     virtualFile.compilation,
     virtualFile.source,
@@ -409,6 +422,130 @@ function sourceRangeForVirtualImbaDefinition(
   const startOffset = start.offset;
   const endOffset = Math.max(startOffset + 1, end.offset + 1);
   return { endOffset, startOffset };
+}
+
+function fallbackSourceRangeForVirtualImbaDefinition(
+  virtualFile: VirtualImbaFile,
+  definition: ts.DefinitionInfo,
+): SourceRange | null {
+  const declarations = imbaDeclarationCandidates(virtualFile.source);
+  if (declarations.length === 0) return null;
+
+  const names = preferredImbaDefinitionNames(definition);
+  for (const name of names) {
+    const match = bestImbaDeclarationCandidate(
+      declarations.filter((declaration) => declaration.name === name),
+    );
+    if (match) return match;
+  }
+
+  return bestImbaDeclarationCandidate(declarations);
+}
+
+function preferredImbaDefinitionNames(definition: ts.DefinitionInfo): string[] {
+  const names = new Set<string>();
+
+  for (const raw of [
+    definition.name,
+    qualifiedDefinitionName(definition),
+  ]) {
+    for (const name of imbaNameCandidates(raw)) {
+      names.add(name);
+    }
+  }
+
+  return [...names];
+}
+
+function imbaNameCandidates(raw: string | undefined): string[] {
+  const value = toImbaIdentifier(raw ?? "");
+  const parts = value.split(".");
+  const candidates = [value, parts[parts.length - 1] ?? ""];
+
+  return candidates.filter(isImbaIdentifierName);
+}
+
+function isImbaIdentifierName(value: string): boolean {
+  return /^[@$A-Za-z_][\w$?!@-]*$/.test(value);
+}
+
+function imbaDeclarationCandidates(source: string): ImbaDeclarationCandidate[] {
+  const candidates: ImbaDeclarationCandidate[] = [];
+  let lineStart = 0;
+
+  for (const line of source.split("\n")) {
+    const declaration = imbaDeclarationCandidateForLine(line, lineStart);
+    if (declaration) candidates.push(declaration);
+
+    lineStart += line.length + 1;
+  }
+
+  return candidates;
+}
+
+function imbaDeclarationCandidateForLine(
+  line: string,
+  lineStart: number,
+): ImbaDeclarationCandidate | null {
+  const declarationMatch = line.match(
+    /^(\t*)(?:(export)\s+)?(?:default\s+)?(?:class|tag|def|get|set|prop|attr)\s+([@$A-Za-z_][\w$?!@-]*)/,
+  );
+  if (declarationMatch) {
+    return imbaDeclarationCandidateFromMatch(line, lineStart, declarationMatch);
+  }
+
+  const bindingMatch = line.match(
+    /^(\t*)(?:(export)\s+)?(?:let|const|var)\s+([@$A-Za-z_][\w$?!@-]*)/,
+  );
+  if (bindingMatch) {
+    return imbaDeclarationCandidateFromMatch(line, lineStart, bindingMatch);
+  }
+
+  const assignmentMatch = line.match(
+    /^(\t*)(?:(export)\s+)?([@$A-Za-z_][\w$?!@-]*)\s*=/,
+  );
+  if (assignmentMatch) {
+    return imbaDeclarationCandidateFromMatch(line, lineStart, assignmentMatch);
+  }
+
+  return null;
+}
+
+function imbaDeclarationCandidateFromMatch(
+  line: string,
+  lineStart: number,
+  match: RegExpMatchArray,
+): ImbaDeclarationCandidate | null {
+  const indent = match[1] ?? "";
+  const name = match[3] ?? match[2];
+  if (!name) return null;
+
+  const nameOffset = match[0].lastIndexOf(name);
+  if (nameOffset === -1) return null;
+
+  return {
+    endOffset: lineStart + nameOffset + name.length,
+    exported: Boolean(match[2]),
+    name,
+    startOffset: lineStart + nameOffset,
+    topLevel: indent.length === 0,
+  };
+}
+
+function bestImbaDeclarationCandidate(
+  declarations: ImbaDeclarationCandidate[],
+): ImbaDeclarationCandidate | null {
+  return declarations.sort((left, right) =>
+    imbaDeclarationRank(right) - imbaDeclarationRank(left) ||
+    left.startOffset - right.startOffset
+  )[0] ?? null;
+}
+
+function imbaDeclarationRank(declaration: ImbaDeclarationCandidate): number {
+  if (declaration.topLevel && declaration.exported) return 4;
+  if (declaration.topLevel) return 3;
+  if (declaration.exported) return 2;
+  return 1;
 }
 
 function declarationLineAtOffset(source: string, offset: number): string | null {

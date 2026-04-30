@@ -203,6 +203,8 @@ const validSource = [
   "person.greet",
   "let profile = new Profile",
   "profile.name",
+  "profile.ready?",
+  "profile.foo-bar",
   "profile.greet",
   "",
 ].join("\n");
@@ -342,6 +344,24 @@ async function main(): Promise<void> {
     assert.ok(importedProfileDefinition, "expected class definition in imported profile.imba");
     assert.equal(locationText(validSource, uri, importedProfileDefinition), "Profile");
 
+    const importedReadyDefinition = locations(
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "profile.ready?"),
+      }),
+    ).find((location) => location.uri.endsWith("/project/profile.imba"));
+    assert.ok(importedReadyDefinition, "expected ready? definition in imported profile.imba");
+    assert.equal(locationText(validSource, uri, importedReadyDefinition), "ready?");
+
+    const importedDashedDefinition = locations(
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "profile.foo-bar"),
+      }),
+    ).find((location) => location.uri.endsWith("/project/profile.imba"));
+    assert.ok(importedDashedDefinition, "expected foo-bar definition in imported profile.imba");
+    assert.equal(locationText(validSource, uri, importedDashedDefinition), "foo-bar");
+
     const greetHover = hoverText(
       await client.request("textDocument/hover", {
         textDocument: { uri },
@@ -368,6 +388,16 @@ async function main(): Promise<void> {
     );
     assert.match(importedProfileHover, /Imba class `Profile`/);
     assert.match(importedProfileHover, /export class Profile/);
+
+    const importedReadyHover = hoverText(
+      await client.request("textDocument/hover", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "profile.ready?"),
+      }),
+    );
+    assert.match(importedReadyHover, /Profile\.ready\?/);
+    assert.match(importedReadyHover, /get ready\?/);
+    assert.doesNotMatch(importedReadyHover, /readyΦ/);
 
     const navigatorHover = hoverText(
       await client.request("textDocument/hover", {

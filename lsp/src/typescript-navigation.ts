@@ -10,6 +10,7 @@ import {
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import * as ts from "typescript";
 import type { ImbaCompilation } from "./compiler";
+import { toImbaIdentifier, toJsIdentifier } from "./imba-identifiers";
 import {
   generatedOffsetToSourceOffset,
   sourceOffsetToGeneratedOffset,
@@ -27,7 +28,8 @@ interface ExpressionContext {
   tokenRange: Range;
 }
 
-const expressionPattern = /^[$A-Za-z_][\w$]*(?:(?:\.|\?\.)[$A-Za-z_][\w$]*)*$/;
+const imbaExpressionPattern =
+  /^[$A-Za-z_][\w$?!-]*(?:(?:\.|\?\.)[$A-Za-z_][\w$?!-]*)*$/;
 
 export function buildTypeScriptHover(
   document: TextDocument,
@@ -233,7 +235,8 @@ function createExpressionProbe(
 ): { fileName: string; offset: number; service: ts.LanguageService; source: string } {
   const prefix = "const __imba_lsp_probe = ";
   const fileName = `${sourcePath ?? path.join(process.cwd(), "untitled.imba")}.ts-nav.js`;
-  const source = `${prefix}${context.expression};\n`;
+  const expression = toJsMemberExpression(context.expression);
+  const source = `${prefix}${expression};\n`;
 
   return {
     fileName,
@@ -262,7 +265,7 @@ function expressionContextAt(
   const expressionEnd = scanExpressionEnd(source, tokenEnd);
   const expression = source.slice(expressionStart, expressionEnd);
 
-  if (!expressionPattern.test(expression)) return null;
+  if (!imbaExpressionPattern.test(expression)) return null;
 
   return {
     expression,
@@ -416,7 +419,7 @@ function virtualImbaHoverTitle(
   declaration: string,
 ): string {
   const kind = imbaKindForDefinition(definition, declaration);
-  const name = qualifiedDefinitionName(definition);
+  const name = toImbaIdentifier(qualifiedDefinitionName(definition));
   return `Imba ${kind} \`${name}\``;
 }
 
@@ -465,7 +468,7 @@ function positionForOffset(
 function hoverMarkdown(display: string, documentation: string): string {
   return [
     "```ts",
-    display,
+    toImbaIdentifier(display),
     "```",
     documentation,
   ].filter(Boolean).join("\n\n");
@@ -480,7 +483,7 @@ function virtualImbaHoverMarkdown(
   return [
     title,
     `\`\`\`imba\n${declaration}\n\`\`\``,
-    `\`\`\`ts\n${display}\n\`\`\``,
+    `\`\`\`ts\n${toImbaIdentifier(display)}\n\`\`\``,
     documentation,
   ].filter(Boolean).join("\n\n");
 }
@@ -490,5 +493,12 @@ function isIdentifierStart(value: string | undefined): boolean {
 }
 
 function isIdentifierPart(value: string | undefined): boolean {
-  return typeof value === "string" && /[$A-Za-z_0-9]/.test(value);
+  return typeof value === "string" && /[$A-Za-z_0-9?!-]/.test(value);
+}
+
+function toJsMemberExpression(expression: string): string {
+  return expression
+    .split(/(\?\.|\.)/)
+    .map((part) => part === "." || part === "?." ? part : toJsIdentifier(part))
+    .join("");
 }

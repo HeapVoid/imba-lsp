@@ -1,4 +1,12 @@
+const toJsIdentifierPattern = /[-?#@]/gu;
 const toImbaIdentifierPattern = /[ΞΦΨα]/gu;
+
+const toJsIdentifierMap: Record<string, string> = {
+  "-": "Ξ",
+  "?": "Φ",
+  "#": "Ψ",
+  "@": "α",
+};
 
 const toImbaIdentifierMap: Record<string, string> = {
   "Ξ": "-",
@@ -25,6 +33,10 @@ const generatedInternalPrefixes = new Set([
 
 export function toImbaIdentifier(value: string): string {
   return value.replace(toImbaIdentifierPattern, (match) => toImbaIdentifierMap[match] ?? match);
+}
+
+export function toJsIdentifier(value: string): string {
+  return value.replace(toJsIdentifierPattern, (match) => toJsIdentifierMap[match] ?? match);
 }
 
 export function isGeneratedInternalIdentifier(value: string): boolean {

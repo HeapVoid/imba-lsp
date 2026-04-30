@@ -32,6 +32,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - TypeScript-backed member completions decode compiler-mangled Imba identifiers such as `readyΦ` and `fooΞbar` back to `ready?` and `foo-bar`
 - initial local hover and go-to-definition for Imba declarations, fields, and typed local class members
 - initial TypeScript-backed hover and go-to-definition for JS-compatible browser/global expressions
+- TypeScript-backed hover and go-to-definition understand compiler-mangled Imba member names such as `ready?` and `foo-bar`
 - initial span-based mapping from Imba source offsets to generated JS offsets via native `locs.spans`
 - member completions now include explicit LSP replacement edits instead of relying on editor word guessing
 - TypeScript bridge reads project `tsconfig.json` and resolves imported `.imba` files as virtual compiled JS modules for cross-file hover/completion

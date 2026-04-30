@@ -7,6 +7,7 @@ import {
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { ImbaCompilation } from "./compiler";
+import { buildCssCompletionItems } from "./imba-css";
 import { buildTypeScriptCompletionItems } from "./typescript-completion";
 
 export const completionTriggerCharacters = [".", "@", "<", ":", "[", " "] as const;
@@ -135,68 +136,6 @@ const events = [
   "touchstart",
 ].sort();
 
-const cssProperties = [
-  "ai",
-  "bd",
-  "bg",
-  "bgc",
-  "bxs",
-  "c",
-  "cur",
-  "d",
-  "ff",
-  "fl",
-  "fld",
-  "fs",
-  "fw",
-  "g",
-  "gtc",
-  "gtr",
-  "h",
-  "jc",
-  "lh",
-  "m",
-  "mah",
-  "maw",
-  "mih",
-  "miw",
-  "mx",
-  "my",
-  "o",
-  "of",
-  "ofx",
-  "ofy",
-  "p",
-  "pos",
-  "px",
-  "py",
-  "rd",
-  "s",
-  "ta",
-  "td",
-  "tween",
-  "us",
-  "w",
-].sort();
-
-const cssValues = [
-  "black",
-  "blue5",
-  "blue6",
-  "bold",
-  "center",
-  "flex",
-  "gray1",
-  "gray5",
-  "gray9",
-  "green5",
-  "grid",
-  "none",
-  "pointer",
-  "red5",
-  "white",
-].sort();
-
 const globalItems = [
   "AbortController",
   "Array",
@@ -283,6 +222,11 @@ export function buildCompletionItems(
   const line = getLine(source, position.line);
   const prefix = line.slice(0, position.character);
   const symbols = collectDocumentCompletions(source, compilation);
+  const cssItems = buildCssCompletionItems(document, position, sourcePath);
+
+  if (cssItems) {
+    return uniqueItems(cssItems);
+  }
 
   if (isEventContext(prefix)) {
     return uniqueItems(
@@ -324,15 +268,6 @@ export function buildCompletionItems(
         ),
         replacementRange,
       ),
-    ]);
-  }
-
-  if (isCssContext(source, position, prefix)) {
-    return uniqueItems([
-      ...cssProperties.map((property) =>
-        item(property, CompletionItemKind.Property, "Imba CSS property", "20"),
-      ),
-      ...cssValues.map((value) => item(value, CompletionItemKind.Value, "Imba CSS value", "40")),
     ]);
   }
 
@@ -475,39 +410,6 @@ function isTagContext(prefix: string): boolean {
   const tagStart = prefix.lastIndexOf("<");
   const tagEnd = prefix.lastIndexOf(">");
   return tagStart > tagEnd;
-}
-
-function isCssContext(source: string, position: Position, prefix: string): boolean {
-  if (isInlineStyleContext(prefix)) return true;
-
-  const lines = source.split("\n");
-  const currentIndent = indentOf(lines[position.line] ?? "");
-
-  for (let line = position.line; line >= 0; line--) {
-    const text = lines[line] ?? "";
-    if (!text.trim()) continue;
-
-    const indent = indentOf(text);
-    const trimmed = text.trim();
-
-    if (/^(?:global\s+)?css(?:\s|$)/.test(trimmed)) {
-      return line === position.line || indent < currentIndent;
-    }
-
-    if (indent < currentIndent) {
-      return false;
-    }
-  }
-
-  return false;
-}
-
-function isInlineStyleContext(prefix: string): boolean {
-  return prefix.lastIndexOf("[") > prefix.lastIndexOf("]");
-}
-
-function indentOf(line: string): number {
-  return line.match(/^\t*/)?.[0].length ?? 0;
 }
 
 function getLine(source: string, line: number): string {

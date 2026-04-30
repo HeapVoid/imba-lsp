@@ -791,6 +791,27 @@ async function main(): Promise<void> {
     );
     assert.ok(cssCompletion.has("bgc"));
     assert.ok(cssCompletion.has("c"));
+    assert.ok(cssCompletion.has("maw"));
+    assert.ok(cssCompletion.has("background-color"));
+
+    const cssValueCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionBefore(validSource, "red5"),
+      }),
+    );
+    assert.ok(cssValueCompletion.has("gray9"));
+    assert.ok(cssValueCompletion.has("blue6/40"));
+    assert.equal(cssValueCompletion.has("maw"), false);
+
+    const cssHover = hoverText(
+      await client.request("textDocument/hover", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "bgc"),
+      }),
+    );
+    assert.match(cssHover, /Imba CSS shortcut `bgc`/);
+    assert.match(cssHover, /background-color/);
 
     const tagCompletion = completionLabels(
       await client.request("textDocument/completion", {

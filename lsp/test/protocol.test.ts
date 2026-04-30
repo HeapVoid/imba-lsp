@@ -176,6 +176,8 @@ const uri = pathToFileURL(fixturePath).toString();
 const invalidSource = ["tag app", "\tdef render", "\t\treturn if", ""].join("\n");
 const validSource = [
   "import {Profile} from './project/profile.imba'",
+  "import {PersonProfile, DefaultProfile} from './project/barrel.imba'",
+  "import * as profiles from './project/profile.imba'",
   "",
   "tag app",
   "\tcount = 0",
@@ -208,6 +210,12 @@ const validSource = [
   "profile.ready?",
   "profile.foo-bar",
   "profile.greet",
+  "let aliased = new PersonProfile",
+  "aliased.greet",
+  "let defaultProfile = new DefaultProfile",
+  "defaultProfile.greet",
+  "let namespaceProfile = new profiles.Profile",
+  "namespaceProfile.greet",
   "",
 ].join("\n");
 
@@ -249,6 +257,8 @@ async function main(): Promise<void> {
         definitionProvider?: boolean;
         documentSymbolProvider?: boolean;
         hoverProvider?: boolean;
+        referencesProvider?: boolean;
+        renameProvider?: unknown;
         semanticTokensProvider?: unknown;
       };
     };
@@ -256,6 +266,8 @@ async function main(): Promise<void> {
     assert.equal(initialize.capabilities?.documentSymbolProvider, true);
     assert.equal(initialize.capabilities?.definitionProvider, true);
     assert.equal(initialize.capabilities?.hoverProvider, true);
+    assert.equal(initialize.capabilities?.referencesProvider, true);
+    assert.ok(initialize.capabilities?.renameProvider);
     assert.ok(initialize.capabilities?.semanticTokensProvider);
     assert.ok(initialize.capabilities?.completionProvider);
     assert.ok(initialize.capabilities.completionProvider.triggerCharacters?.includes("."));
@@ -370,6 +382,33 @@ async function main(): Promise<void> {
     );
     assert.equal(locationText(validSource, uri, importedProfilePathDefinition), "Profile");
 
+    const aliasedProfileDefinition = locations(
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "new PersonProfile"),
+      }),
+    ).find((location) => location.uri.endsWith("/project/profile.imba"));
+    assert.ok(aliasedProfileDefinition, "expected aliased class definition in imported profile.imba");
+    assert.equal(locationText(validSource, uri, aliasedProfileDefinition), "Profile");
+
+    const defaultProfileDefinition = locations(
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "new DefaultProfile"),
+      }),
+    ).find((location) => location.uri.endsWith("/project/default-profile.imba"));
+    assert.ok(defaultProfileDefinition, "expected default class definition in imported profile.imba");
+    assert.equal(locationText(validSource, uri, defaultProfileDefinition), "DefaultProfile");
+
+    const namespaceProfileDefinition = locations(
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "profiles.Profile"),
+      }),
+    ).find((location) => location.uri.endsWith("/project/profile.imba"));
+    assert.ok(namespaceProfileDefinition, "expected namespace class definition in imported profile.imba");
+    assert.equal(locationText(validSource, uri, namespaceProfileDefinition), "Profile");
+
     const importedReadyDefinition = locations(
       await client.request("textDocument/definition", {
         textDocument: { uri },
@@ -387,6 +426,80 @@ async function main(): Promise<void> {
     ).find((location) => location.uri.endsWith("/project/profile.imba"));
     assert.ok(importedDashedDefinition, "expected foo-bar definition in imported profile.imba");
     assert.equal(locationText(validSource, uri, importedDashedDefinition), "foo-bar");
+
+    const aliasedGreetDefinition = locations(
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "aliased.greet"),
+      }),
+    ).find((location) => location.uri.endsWith("/project/profile.imba"));
+    assert.ok(aliasedGreetDefinition, "expected aliased greet definition in imported profile.imba");
+    assert.equal(locationText(validSource, uri, aliasedGreetDefinition), "greet");
+
+    const defaultGreetDefinition = locations(
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "defaultProfile.greet"),
+      }),
+    ).find((location) => location.uri.endsWith("/project/default-profile.imba"));
+    assert.ok(defaultGreetDefinition, "expected default greet definition in imported profile.imba");
+    assert.equal(locationText(validSource, uri, defaultGreetDefinition), "greet");
+
+    const dashedReferences = locations(
+      await client.request("textDocument/references", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "profile.foo-bar"),
+        context: {
+          includeDeclaration: true,
+        },
+      }),
+    );
+    assert.ok(
+      dashedReferences.some((location) =>
+        location.uri.endsWith("/project/profile.imba") &&
+        locationText(validSource, uri, location) === "foo-bar"
+      ),
+      "expected foo-bar declaration reference in imported profile.imba",
+    );
+    assert.ok(
+      dashedReferences.some((location) =>
+        location.uri === uri &&
+        locationText(validSource, uri, location) === "foo-bar"
+      ),
+      "expected foo-bar usage reference in current document",
+    );
+
+    const dashedPrepareRename = await client.request("textDocument/prepareRename", {
+      textDocument: { uri },
+      position: positionAfter(validSource, "profile.foo-bar"),
+    }) as { placeholder?: unknown; range?: LspRange } | null;
+    assert.equal(dashedPrepareRename?.placeholder, "foo-bar");
+    assert.ok(dashedPrepareRename?.range);
+    assert.equal(rangeText(validSource, dashedPrepareRename.range), "foo-bar");
+
+    const dashedRenameEdits = workspaceEditItems(
+      await client.request("textDocument/rename", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "profile.foo-bar"),
+        newName: "bar-baz",
+      }),
+    );
+    assert.ok(
+      dashedRenameEdits.some((edit) =>
+        edit.uri.endsWith("/project/profile.imba") &&
+        edit.newText === "bar-baz" &&
+        locationText(validSource, uri, edit) === "foo-bar"
+      ),
+      "expected foo-bar declaration rename edit in imported profile.imba",
+    );
+    assert.ok(
+      dashedRenameEdits.some((edit) =>
+        edit.uri === uri &&
+        edit.newText === "bar-baz" &&
+        locationText(validSource, uri, edit) === "foo-bar"
+      ),
+      "expected foo-bar usage rename edit in current document",
+    );
 
     const greetHover = hoverText(
       await client.request("textDocument/hover", {
@@ -699,6 +812,26 @@ function locationTexts(source: string, result: unknown): Set<string> {
 
 function locationUris(result: unknown): string[] {
   return locations(result).map((location) => location.uri);
+}
+
+function workspaceEditItems(result: unknown): Array<LspLocation & { newText: string }> {
+  const changes = (result as { changes?: Record<string, unknown[]> } | undefined)?.changes ?? {};
+  const items: Array<LspLocation & { newText: string }> = [];
+
+  for (const [uri, edits] of Object.entries(changes)) {
+    for (const edit of edits) {
+      const textEdit = edit as { newText?: unknown; range?: LspRange };
+      if (typeof textEdit.newText !== "string" || !textEdit.range) continue;
+
+      items.push({
+        newText: textEdit.newText,
+        range: textEdit.range,
+        uri,
+      });
+    }
+  }
+
+  return items;
 }
 
 function locations(result: unknown): LspLocation[] {

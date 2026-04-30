@@ -11,7 +11,13 @@ import { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { buildCompletionItems, completionTriggerCharacters } from "./completion";
 import { compileImba, type CompileResult } from "./compiler";
-import { buildDefinitionLocations, buildHover } from "./navigation";
+import {
+  buildDefinitionLocations,
+  buildHover,
+  buildReferenceLocations,
+  buildRenameEdit,
+  prepareRename,
+} from "./navigation";
 import {
   buildSemanticTokenData,
   semanticTokenModifiers,
@@ -50,6 +56,10 @@ connection.onInitialize((_params: InitializeParams): InitializeResult => ({
     },
     documentSymbolProvider: true,
     definitionProvider: true,
+    referencesProvider: true,
+    renameProvider: {
+      prepareProvider: true,
+    },
     hoverProvider: true,
     completionProvider: {
       triggerCharacters: [...completionTriggerCharacters],
@@ -135,6 +145,47 @@ connection.onDefinition((params) => {
     params.position,
     filePathFromUri(document.uri),
     state.result.compilation,
+  );
+});
+
+connection.onReferences((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return [];
+
+  const state = currentState(document);
+  return buildReferenceLocations(
+    document,
+    params.position,
+    filePathFromUri(document.uri),
+    state.result.compilation,
+    params.context.includeDeclaration,
+  );
+});
+
+connection.onPrepareRename((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return null;
+
+  const state = currentState(document);
+  return prepareRename(
+    document,
+    params.position,
+    filePathFromUri(document.uri),
+    state.result.compilation,
+  );
+});
+
+connection.onRenameRequest((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return null;
+
+  const state = currentState(document);
+  return buildRenameEdit(
+    document,
+    params.position,
+    filePathFromUri(document.uri),
+    state.result.compilation,
+    params.newName,
   );
 });
 

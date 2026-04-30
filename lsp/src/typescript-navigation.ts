@@ -39,6 +39,11 @@ interface ImbaDeclarationCandidate extends SourceRange {
   topLevel: boolean;
 }
 
+interface CurrentVirtualImbaFile {
+  fileName: string;
+  virtualFile: VirtualImbaFile;
+}
+
 const imbaExpressionPattern =
   /^[$A-Za-z_][\w$?!-]*(?:(?:\.|\?\.)[$A-Za-z_][\w$?!-]*)*$/;
 
@@ -78,6 +83,37 @@ export function buildTypeScriptDefinitionLocations(
   const definitions = definitionLocations(probe.service, probe.fileName, probe.offset);
 
   return definitions;
+}
+
+export function buildTypeScriptReferenceLocations(
+  document: TextDocument,
+  position: Position,
+  sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
+  includeDeclaration: boolean,
+): Location[] {
+  const context = expressionContextAt(document, position);
+  if (!context) return [];
+
+  return getCompiledReferenceLocations(
+    document,
+    context,
+    sourcePath,
+    compilation,
+    includeDeclaration,
+  );
+}
+
+export function buildTypeScriptRenameLocations(
+  document: TextDocument,
+  position: Position,
+  sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
+): Location[] {
+  const context = expressionContextAt(document, position);
+  if (!context) return [];
+
+  return getCompiledRenameLocations(document, context, sourcePath, compilation);
 }
 
 function getCompiledHover(
@@ -120,6 +156,78 @@ function getCompiledDefinitionLocations(
   const fileName = `${sourcePath ?? path.join(process.cwd(), "untitled.imba")}.compiled.js`;
   const service = createTypeScriptLanguageService(fileName, generated);
   return definitionLocations(service, fileName, mapping.offset);
+}
+
+function getCompiledReferenceLocations(
+  document: TextDocument,
+  context: ExpressionContext,
+  sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
+  includeDeclaration: boolean,
+): Location[] {
+  const generated = compilation?.js;
+  if (!generated || !sourcePath) return [];
+
+  const source = document.getText();
+  const mapping = sourceOffsetToGeneratedOffset(
+    compilation,
+    source,
+    context.tokenStartOffset,
+  );
+  if (!mapping) return [];
+
+  const fileName = `${sourcePath}.compiled.js`;
+  const service = createTypeScriptLanguageService(fileName, generated);
+  const symbols = service.findReferences(fileName, mapping.offset) ?? [];
+  const entries = symbols.flatMap((symbol) =>
+    symbol.references.filter((entry) => includeDeclaration || !entry.isDefinition)
+  );
+
+  return locationsForDocumentSpans(service, entries, {
+    currentVirtualFile: {
+      fileName,
+      virtualFile: {
+        compilation,
+        source,
+        sourcePath,
+      },
+    },
+  });
+}
+
+function getCompiledRenameLocations(
+  document: TextDocument,
+  context: ExpressionContext,
+  sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
+): Location[] {
+  const generated = compilation?.js;
+  if (!generated || !sourcePath) return [];
+
+  const source = document.getText();
+  const mapping = sourceOffsetToGeneratedOffset(
+    compilation,
+    source,
+    context.tokenStartOffset,
+  );
+  if (!mapping) return [];
+
+  const fileName = `${sourcePath}.compiled.js`;
+  const service = createTypeScriptLanguageService(fileName, generated);
+  const renameInfo = service.getRenameInfo(fileName, mapping.offset, {});
+  if (!renameInfo.canRename) return [];
+
+  const entries = service.findRenameLocations(fileName, mapping.offset, false, false, {}) ?? [];
+  return locationsForDocumentSpans(service, entries, {
+    currentVirtualFile: {
+      fileName,
+      virtualFile: {
+        compilation,
+        source,
+        sourcePath,
+      },
+    },
+  });
 }
 
 function getExpressionQuickInfo(
@@ -359,26 +467,9 @@ function locationForDefinition(
   service: ts.LanguageService,
   definition: ts.DefinitionInfo,
 ): Location | null {
-  const virtualImbaFile = virtualImbaFileFor(service, definition.fileName);
-  if (virtualImbaFile) {
-    return locationForVirtualImbaDefinition(virtualImbaFile, definition);
-  }
-
-  const sourceFile = service.getProgram()?.getSourceFile(definition.fileName);
-  const fileText = sourceFile?.getFullText() ?? ts.sys.readFile(definition.fileName);
-  if (!fileText) return null;
-
-  const start = positionForOffset(sourceFile, fileText, definition.textSpan.start);
-  const end = positionForOffset(
-    sourceFile,
-    fileText,
-    definition.textSpan.start + definition.textSpan.length,
-  );
-
-  return Location.create(
-    pathToFileURL(definition.fileName).toString(),
-    Range.create(start.line, start.character, end.line, end.character),
-  );
+  return locationForDocumentSpan(service, definition, {
+    fallbackDefinition: definition,
+  });
 }
 
 function locationForVirtualImbaDefinition(
@@ -407,21 +498,112 @@ function sourceRangeForVirtualImbaDefinition(
   virtualFile: VirtualImbaFile,
   definition: ts.DefinitionInfo,
 ): SourceRange | null {
+  return sourceRangeForVirtualImbaTextSpan(virtualFile, definition.textSpan);
+}
+
+function sourceRangeForVirtualImbaTextSpan(
+  virtualFile: VirtualImbaFile,
+  textSpan: ts.TextSpan,
+): SourceRange | null {
   const start = generatedOffsetToSourceOffset(
     virtualFile.compilation,
     virtualFile.source,
-    definition.textSpan.start,
+    textSpan.start,
   );
   const end = generatedOffsetToSourceOffset(
     virtualFile.compilation,
     virtualFile.source,
-    definition.textSpan.start + Math.max(definition.textSpan.length - 1, 0),
+    textSpan.start + Math.max(textSpan.length - 1, 0),
   );
   if (!start || !end) return null;
 
   const startOffset = start.offset;
   const endOffset = Math.max(startOffset + 1, end.offset + 1);
   return { endOffset, startOffset };
+}
+
+function locationsForDocumentSpans(
+  service: ts.LanguageService,
+  spans: readonly ts.DocumentSpan[],
+  options: {
+    currentVirtualFile?: CurrentVirtualImbaFile;
+  } = {},
+): Location[] {
+  const locations: Location[] = [];
+  const seen = new Set<string>();
+
+  for (const span of spans) {
+    const location = locationForDocumentSpan(service, span, options);
+    if (!location) continue;
+
+    const key = [
+      location.uri,
+      location.range.start.line,
+      location.range.start.character,
+      location.range.end.line,
+      location.range.end.character,
+    ].join(":");
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    locations.push(location);
+  }
+
+  return locations;
+}
+
+function locationForDocumentSpan(
+  service: ts.LanguageService,
+  span: ts.DocumentSpan,
+  options: {
+    currentVirtualFile?: CurrentVirtualImbaFile;
+    fallbackDefinition?: ts.DefinitionInfo;
+  } = {},
+): Location | null {
+  const virtualImbaFile = virtualImbaFileForDocumentSpan(service, span, options.currentVirtualFile);
+  if (virtualImbaFile) {
+    const sourceRange = sourceRangeForVirtualImbaTextSpan(virtualImbaFile, span.textSpan) ??
+      (options.fallbackDefinition
+        ? fallbackSourceRangeForVirtualImbaDefinition(virtualImbaFile, options.fallbackDefinition)
+        : null);
+    if (!sourceRange) return null;
+
+    return Location.create(
+      pathToFileURL(virtualImbaFile.sourcePath).toString(),
+      Range.create(
+        positionForOffset(undefined, virtualImbaFile.source, sourceRange.startOffset),
+        positionForOffset(undefined, virtualImbaFile.source, sourceRange.endOffset),
+      ),
+    );
+  }
+
+  const sourceFile = service.getProgram()?.getSourceFile(span.fileName);
+  const fileText = sourceFile?.getFullText() ?? ts.sys.readFile(span.fileName);
+  if (!fileText) return null;
+
+  const start = positionForOffset(sourceFile, fileText, span.textSpan.start);
+  const end = positionForOffset(
+    sourceFile,
+    fileText,
+    span.textSpan.start + span.textSpan.length,
+  );
+
+  return Location.create(
+    pathToFileURL(span.fileName).toString(),
+    Range.create(start.line, start.character, end.line, end.character),
+  );
+}
+
+function virtualImbaFileForDocumentSpan(
+  service: ts.LanguageService,
+  span: ts.DocumentSpan,
+  currentVirtualFile: CurrentVirtualImbaFile | undefined,
+): VirtualImbaFile | undefined {
+  if (currentVirtualFile?.fileName === span.fileName) {
+    return currentVirtualFile.virtualFile;
+  }
+
+  return virtualImbaFileFor(service, span.fileName);
 }
 
 function fallbackSourceRangeForVirtualImbaDefinition(
@@ -577,8 +759,36 @@ function virtualImbaHoverTitle(
   declaration: string,
 ): string {
   const kind = imbaKindForDefinition(definition, declaration);
-  const name = toImbaIdentifier(qualifiedDefinitionName(definition));
+  const name = virtualImbaHoverName(definition, declaration);
   return `Imba ${kind} \`${name}\``;
+}
+
+function virtualImbaHoverName(
+  definition: ts.DefinitionInfo,
+  declaration: string,
+): string {
+  const declarationName = imbaDeclarationName(declaration);
+  if (declarationName && /^(?:export\s+)?(?:default\s+)?(?:class|tag)\s/.test(declaration)) {
+    return declarationName;
+  }
+
+  if (
+    declarationName &&
+    definition.containerName &&
+    !definition.containerName.includes("/")
+  ) {
+    return `${toImbaIdentifier(definition.containerName)}.${declarationName}`;
+  }
+
+  return declarationName ?? toImbaIdentifier(qualifiedDefinitionName(definition));
+}
+
+function imbaDeclarationName(declaration: string): string | null {
+  const match = declaration.match(
+    /^(?:(?:export)\s+)?(?:default\s+)?(?:class|tag|def|get|set|prop|attr)\s+([@$A-Za-z_][\w$?!@-]*)/,
+  ) ?? declaration.match(/^([@$A-Za-z_][\w$?!@-]*)\s*=/);
+
+  return match?.[1] ?? null;
 }
 
 function imbaKindForDefinition(

@@ -1,14 +1,20 @@
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   Hover,
   Location,
   MarkupKind,
   Range,
+  TextEdit,
+  type WorkspaceEdit,
   type Position,
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import {
   buildTypeScriptDefinitionLocations,
   buildTypeScriptHover,
+  buildTypeScriptReferenceLocations,
+  buildTypeScriptRenameLocations,
 } from "./typescript-navigation";
 import type { ImbaCompilation } from "./compiler";
 
@@ -52,6 +58,7 @@ const typedLocalPattern =
 const memberBasePattern =
   /([$A-Za-z_][\w$?!-]*(?:(?:\.|\?\.)[$A-Za-z_][\w$?!-]*)*)\s*(?:\.|\?\.)\s*$/;
 const wordCharacterPattern = /[$A-Za-z_0-9?!:-]/;
+const renameNamePattern = /^@?[$A-Za-z_][\w$?!-]*$/;
 
 export function buildDefinitionLocations(
   document: TextDocument,
@@ -93,6 +100,75 @@ export function buildHover(
   };
 }
 
+export function buildReferenceLocations(
+  document: TextDocument,
+  position: Position,
+  sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
+  includeDeclaration: boolean,
+): Location[] {
+  const typeScriptLocations = buildTypeScriptReferenceLocations(
+    document,
+    position,
+    sourcePath,
+    compilation,
+    includeDeclaration,
+  );
+  if (typeScriptLocations.length > 0) return typeScriptLocations;
+
+  const token = tokenAtPosition(document, position);
+  if (!token) return [];
+
+  return localReferenceLocations(document, position, token, includeDeclaration);
+}
+
+export function prepareRename(
+  document: TextDocument,
+  position: Position,
+  sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
+): { placeholder: string; range: Range } | null {
+  const token = tokenAtPosition(document, position);
+  if (!token) return null;
+
+  const locations = renameLocations(document, position, sourcePath, compilation, token);
+  if (locations.length === 0) return null;
+  if (!allLocationsMatchName(document, locations, token.name)) return null;
+
+  return {
+    placeholder: token.name,
+    range: token.range,
+  };
+}
+
+export function buildRenameEdit(
+  document: TextDocument,
+  position: Position,
+  sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
+  newName: string,
+): WorkspaceEdit | null {
+  if (!renameNamePattern.test(newName)) return null;
+
+  const token = tokenAtPosition(document, position);
+  if (!token) return null;
+
+  const locations = renameLocations(document, position, sourcePath, compilation, token);
+  if (locations.length === 0) return null;
+  if (!allLocationsMatchName(document, locations, token.name)) return null;
+
+  const changes: NonNullable<WorkspaceEdit["changes"]> = {};
+  for (const location of locations) {
+    if (!location.uri.endsWith(".imba")) return null;
+
+    const edits = changes[location.uri] ?? [];
+    edits.push(TextEdit.replace(location.range, newName));
+    changes[location.uri] = edits;
+  }
+
+  return { changes };
+}
+
 function resolveSymbols(
   document: TextDocument,
   position: Position,
@@ -113,6 +189,74 @@ function resolveSymbols(
   }
 
   return index.byName.get(token.name) ?? [];
+}
+
+function renameLocations(
+  document: TextDocument,
+  position: Position,
+  sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
+  token: TokenAtPosition,
+): Location[] {
+  const typeScriptLocations = buildTypeScriptRenameLocations(
+    document,
+    position,
+    sourcePath,
+    compilation,
+  );
+  if (typeScriptLocations.length > 0) return typeScriptLocations;
+
+  return localReferenceLocations(document, position, token, true);
+}
+
+function localReferenceLocations(
+  document: TextDocument,
+  position: Position,
+  token: TokenAtPosition,
+  includeDeclaration: boolean,
+): Location[] {
+  const symbols = resolveSymbols(document, position, token);
+  if (symbols.length === 0) return [];
+
+  const ranges = localReferenceRanges(document.getText(), symbols, token.name, includeDeclaration);
+  return ranges.map((range) => Location.create(document.uri, range));
+}
+
+function localReferenceRanges(
+  source: string,
+  symbols: NavigationSymbol[],
+  name: string,
+  includeDeclaration: boolean,
+): Range[] {
+  const declarationKeys = new Set(
+    symbols.map((symbol) =>
+      `${symbol.range.start.line}:${symbol.range.start.character}`
+    ),
+  );
+  const ranges: Range[] = [];
+  const seen = new Set<string>();
+  let offset = 0;
+
+  while (offset < source.length) {
+    const index = source.indexOf(name, offset);
+    if (index === -1) break;
+
+    const end = index + name.length;
+    offset = end;
+
+    if (isWordCharacter(source[index - 1]) || isWordCharacter(source[end])) continue;
+
+    const range = Range.create(positionAtOffset(source, index), positionAtOffset(source, end));
+    const key = `${range.start.line}:${range.start.character}`;
+    const isDeclaration = declarationKeys.has(key);
+    if (!includeDeclaration && isDeclaration) continue;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    ranges.push(range);
+  }
+
+  return ranges;
 }
 
 function resolveMember(
@@ -396,4 +540,57 @@ function documentationBeforeLine(lines: string[], line: number): string | undefi
 
   const documentation = comments.join("\n").trim();
   return documentation || undefined;
+}
+
+function allLocationsMatchName(
+  document: TextDocument,
+  locations: Location[],
+  name: string,
+): boolean {
+  if (locations.length === 0) return false;
+
+  for (const location of locations) {
+    if (!location.uri.endsWith(".imba")) return false;
+    if (textForLocation(document, location) !== name) return false;
+  }
+
+  return true;
+}
+
+function textForLocation(document: TextDocument, location: Location): string | null {
+  let source: string;
+  if (location.uri === document.uri) {
+    source = document.getText();
+  } else {
+    try {
+      source = fs.readFileSync(fileURLToPath(location.uri), "utf8");
+    } catch {
+      return null;
+    }
+  }
+
+  const start = offsetAtPosition(source, location.range.start);
+  const end = offsetAtPosition(source, location.range.end);
+  return source.slice(start, end);
+}
+
+function positionAtOffset(source: string, offset: number): Position {
+  const prefix = source.slice(0, offset);
+  const lines = prefix.split("\n");
+
+  return {
+    line: lines.length - 1,
+    character: lines[lines.length - 1].length,
+  };
+}
+
+function offsetAtPosition(source: string, position: Position): number {
+  const lines = source.split("\n");
+  let offset = 0;
+
+  for (let line = 0; line < position.line; line++) {
+    offset += (lines[line] ?? "").length + 1;
+  }
+
+  return offset + position.character;
 }

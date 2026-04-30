@@ -294,13 +294,19 @@ function imbaRuntimeAugmentationSource(imbaTypingsPath: string): string {
     "",
     "declare module \"imba\" {",
     "  export import Component = imba.Component;",
+    "  export function iterable$<T>(value: Iterable<T> | ArrayLike<T>): T[];",
+    "  export function iterable$(value: any): any[];",
     ...imbaModuleAnyExports
-      .filter((name) => name !== "Component")
+      .filter((name) => name !== "Component" && name !== "iterable$")
       .map((name) => `  export const ${name}: any;`),
     "}",
     "",
     "declare module \"imba/runtime\" {",
-    ...imbaRuntimeAnyExports.map((name) => `  export const ${name}: any;`),
+    "  export function iterable$<T>(value: Iterable<T> | ArrayLike<T>): T[];",
+    "  export function iterable$(value: any): any[];",
+    ...imbaRuntimeAnyExports
+      .filter((name) => name !== "iterable$")
+      .map((name) => `  export const ${name}: any;`),
     "}",
     "",
   ].join("\n");

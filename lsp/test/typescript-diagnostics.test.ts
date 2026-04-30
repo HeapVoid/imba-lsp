@@ -112,6 +112,33 @@ try {
     ethereumDiagnostics.some((item) => item.message.includes("ethereum")),
     "expected project-owned Window.ethereum diagnostic to remain visible",
   );
+
+  const setIterationSource = [
+    "const listeners = new Set",
+    "def emit",
+    "\tfor listener in listeners",
+    "\t\tlistener!",
+    "",
+  ].join("\n");
+  const setIterationPath = path.join(root, "set-iteration.imba");
+  const setIterationDocument = TextDocument.create(
+    pathToFileURL(setIterationPath).toString(),
+    "imba",
+    1,
+    setIterationSource,
+  );
+  const setIterationResult = compileImba(setIterationSource, setIterationPath, {
+    sourcemap: true,
+  });
+  assert.equal(setIterationResult.diagnostics.length, 0);
+  assert.deepEqual(
+    buildTypeScriptDiagnosticGroups(
+      setIterationDocument,
+      setIterationPath,
+      setIterationResult.compilation,
+    ).current,
+    [],
+  );
 } finally {
   fs.rmSync(root, { force: true, recursive: true });
 }

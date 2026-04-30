@@ -40,6 +40,7 @@ Goal: a small Node/TypeScript LSP that calls native `imba/compiler` and makes Ze
 - [x] Implement initial `textDocument/semanticTokens/full` from native compiler tokens.
 - [x] Implement initial non-TypeScript `textDocument/completion` for keywords, document symbols, tags, events, CSS shortcuts, and heuristic member names.
 - [x] Implement initial local `textDocument/definition` and `textDocument/hover` for declarations, fields, and typed local class members.
+- [x] Implement initial `textDocument/references` and conservative `textDocument/rename`.
 - [ ] Upgrade semantic tokens to use richer Imba program symbols where available.
 - [x] Add Zed language-server registration.
 - [x] Verify diagnostics and LSP startup inside a live Zed dev extension.
@@ -61,6 +62,8 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 - [x] Resolve project `tsconfig.json` and imported `.imba` files as virtual compiled JS modules in the TypeScript bridge.
 - [x] Map cross-file TypeScript definitions from virtual compiled JS back to Imba source ranges.
 - [x] Reuse virtual Imba module metadata for hover documentation and more precise imported symbol ranges.
+- [x] Cover named imports, alias re-exports, default exports, namespace imports, and import module specifier definitions.
+- [x] Map TypeScript references and rename locations from compiled JS back to Imba source.
 - [x] Publish TypeScript diagnostics for the open document with compiled JS ranges mapped back to Imba source.
 - [x] Decode compiler-mangled Imba member names in TypeScript completions.
 - [x] Decode compiler-mangled Imba member names in TypeScript hover/go-to-definition.

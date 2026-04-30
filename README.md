@@ -39,7 +39,9 @@ This repository currently contains a working Zed dev-extension MVP:
 - member completions now include explicit LSP replacement edits instead of relying on editor word guessing
 - TypeScript bridge reads project `tsconfig.json` and resolves imported `.imba` files as virtual compiled JS modules for cross-file hover/completion
 - cross-file TypeScript definitions from virtual compiled `.imba` modules are mapped back to source `.imba` ranges
+- cross-file definitions cover named imports, alias re-exports, default exports, namespace imports, and import module specifiers
 - cross-file TypeScript hover for imported `.imba` symbols prefers the original Imba declaration and suppresses weak `any` hovers
+- initial references and rename support use TypeScript rename/reference locations mapped back to Imba source, with a conservative local fallback
 - initial TypeScript diagnostics for the open `.imba` document, mapped back from compiled JS through native source spans
 - TypeScript diagnostics are also mapped for imported virtual `.imba` modules and published for matching open documents
 - TypeScript diagnostics load Imba runtime typings for compiled JS and can be checked by `lsp:probe -- --typescript-diagnostics`

@@ -23,6 +23,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - `def`, `get`, `set`, `class`, `tag`, `css`, import/export, control-flow statements
 - basic Imba tags such as `<self>`, `<div.card>`, attributes, events, and inline style brackets
 - initial Zed queries for highlights, brackets, indents, outline, and CSS-block injection
+- CSS blocks inject into a hidden `Imba CSS` Zed language so Imba CSS keeps hard-tab indentation without changing global CSS editor settings
 - Rust Zed adapter that launches `imba-lsp` through Zed's managed Node runtime
 - compiler-backed diagnostics from native `imba/compiler`
 - document symbols from native `imba/program` outline data, with a local fallback scanner

@@ -1,3 +1,2 @@
 ((css_block) @injection.content
- (#set! injection.language "css"))
-
+ (#set! injection.language "imba-css"))

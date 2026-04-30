@@ -36,6 +36,9 @@ export const semanticTokenTypes = [
   "boolean",
   "constant",
   "selfKeyword",
+  "tagClass",
+  "tagId",
+  "cssSelector",
 ] as const;
 
 export const semanticTokenModifiers = [
@@ -146,6 +149,16 @@ const identifierTokens = new Set(["IDENTIFIER", "SYMBOL", "SYMBOLID", "ARGVAR"])
 const propertyAccessTokens = new Set([".", "?."]);
 const callFollowerTokens = new Set(["CALL_START", "BANG"]);
 const signatureEndTokens = new Set(["DEF_BODY", "TERMINATOR", "OUTDENT"]);
+const declarationLinePattern =
+  /^(\t*)(?:(export)\s+)?(?:(static)\s+)?(?:extend\s+)?(?:local\s+)?(?:global\s+)?(class|tag|def|get|set|prop|attr)\s+(@?[$A-Za-z_][\w$?!:-]*)/;
+const bindingLinePattern = /^(\t*)(?:(let|const|var)\s+)([$A-Za-z_][\w$?!-]*)/;
+const assignmentLinePattern = /^(\t*)([$A-Za-z_][\w$?!-]*)\s*=/;
+const tagSegmentPattern = /<(?!!|\/)(?=[$A-Za-z_.#])([^>\n]*)>?/g;
+const cssSelectorTokenPattern = /([.#])([@$A-Za-z_][\w$-]*)|(^|[\s>+~,(])([@$A-Za-z_][\w$-]*)(?=[\s.#:[>+~),]|$)/g;
+const tagClassTokenPattern = /([.#])([@$A-Za-z_][\w$-]*)/g;
+const tagAttributeTokenPattern = /(?:^|\s)([@$A-Za-z_][\w$-]*)(?=\s*(?:=|$|\]))/g;
+const tagEventTokenPattern = /@([@$A-Za-z_][\w$-]*)/g;
+const stylePropertyPattern = /(?:^|\s)([$A-Za-z_][\w$-]*)\s*:/g;
 
 export function buildSemanticTokenData(
   document: TextDocument,
@@ -158,6 +171,8 @@ export function buildSemanticTokenData(
 
   let previousType: string | null = null;
   let signature: SignatureContext | null = null;
+
+  items.push(...buildSourceSemanticItems(document.getText()));
 
   for (let index = 0; index < compilerTokens.length; index++) {
     const token = compilerTokens[index];
@@ -184,6 +199,7 @@ export function buildSemanticTokenData(
             length,
             typeIndex: tokenTypeIndex.get(semanticType) ?? tokenTypeIndex.get("variable") ?? 0,
             modifiers: modifierMask(token.type, semanticType, context),
+            priority: 0,
           });
         }
       }
@@ -221,10 +237,16 @@ interface SemanticItem {
   length: number;
   typeIndex: number;
   modifiers: number;
+  priority: number;
 }
 
 function encodeSemanticTokens(items: SemanticItem[]): number[] {
-  items.sort((a, b) => a.line - b.line || a.character - b.character);
+  items.sort((a, b) =>
+    a.line - b.line ||
+    a.character - b.character ||
+    b.priority - a.priority ||
+    a.length - b.length
+  );
 
   const data: number[] = [];
   let lastLine = 0;
@@ -274,7 +296,7 @@ function classify(type: string, context: ClassificationContext): string | null {
   if (type === "CSSFUNCTION") return "function";
   if (type === "COLOR" || type === "CSSIDENTIFIER" || type === "CSSVAR") return "cssValue";
   if (type === "CSSPROP") return "cssProperty";
-  if (type === "CSS_SEL") return "tag";
+  if (type === "CSS_SEL") return null;
 
   if (type === "TAG_TYPE") {
     return previousType === "TAG" ? "class" : "tag";
@@ -313,6 +335,344 @@ function classify(type: string, context: ClassificationContext): string | null {
   }
 
   return null;
+}
+
+function buildSourceSemanticItems(source: string): SemanticItem[] {
+  const lines = source.split("\n");
+  const items: SemanticItem[] = [];
+  const stack: Array<{ indent: number; kind: string }> = [];
+  let cssIndent: number | null = null;
+
+  for (let line = 0; line < lines.length; line++) {
+    const text = lines[line] ?? "";
+    const trimmed = text.trim();
+    const indent = indentOf(text);
+
+    if (!trimmed) continue;
+
+    while (stack.length && stack[stack.length - 1].indent >= indent) {
+      stack.pop();
+    }
+
+    if (cssIndent !== null && indent <= cssIndent) {
+      cssIndent = null;
+    }
+
+    const declaration = text.match(declarationLinePattern);
+    if (declaration) {
+      addDeclarationLineItems(items, declaration, line, text);
+
+      const keyword = declaration[4] ?? "";
+      if (keyword === "class" || keyword === "tag") {
+        stack.push({ indent, kind: keyword });
+      }
+    }
+
+    const binding = text.match(bindingLinePattern);
+    if (binding) {
+      const name = binding[3] ?? "";
+      addLineToken(items, line, text.indexOf(name), name.length, "variable", {
+        modifiers: modifierNamesToMask(["declaration"]),
+        priority: 4,
+      });
+    }
+
+    const assignment = text.match(assignmentLinePattern);
+    if (assignment && !binding) {
+      const name = assignment[2] ?? "";
+      const inContainer = stack.some((entry) => entry.kind === "class" || entry.kind === "tag");
+      addLineToken(items, line, text.indexOf(name), name.length, inContainer ? "property" : "variable", {
+        modifiers: modifierNamesToMask(["declaration"]),
+        priority: 4,
+      });
+    }
+
+    const cssLine = text.match(/^(\t*)css\b/);
+    if (cssLine) {
+      cssIndent = indent;
+      scanCssSelector(items, line, text, text.indexOf("css") + 3);
+    } else if (cssIndent !== null && indent > cssIndent) {
+      scanCssLine(items, line, text);
+    }
+
+    scanTagSegments(items, line, text);
+  }
+
+  return items;
+}
+
+function addDeclarationLineItems(
+  items: SemanticItem[],
+  match: RegExpMatchArray,
+  line: number,
+  text: string,
+): void {
+  const keyword = match[4] ?? "";
+  const name = match[5] ?? "";
+  const nameStart = match[0].lastIndexOf(name);
+  const semanticType = declarationSemanticType(keyword);
+  const modifiers = modifierNamesToMask(["declaration", "definition"]);
+
+  addLineToken(items, line, nameStart, name.length, semanticType, {
+    modifiers,
+    priority: 5,
+  });
+
+  if (keyword === "def" || keyword === "get" || keyword === "set") {
+    scanSignatureParameters(items, line, text, match[0].length);
+  }
+}
+
+function scanSignatureParameters(
+  items: SemanticItem[],
+  line: number,
+  text: string,
+  signatureStart: number,
+): void {
+  const rest = text.slice(signatureStart);
+  const paramPattern = /([@$A-Za-z_][\w$?!-]*)(?:\s*:\s*([@$A-Za-z_][\w$?!:-]*))?/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = paramPattern.exec(rest)) !== null) {
+    const name = match[1] ?? "";
+    const nameStart = signatureStart + match.index;
+    addLineToken(items, line, nameStart, name.length, "parameter", {
+      modifiers: modifierNamesToMask(["declaration"]),
+      priority: 5,
+    });
+
+    const typeName = match[2];
+    if (typeName) {
+      const typeStart = signatureStart + match.index + match[0].lastIndexOf(typeName);
+      addLineToken(items, line, typeStart, typeName.length, "type", {
+        priority: 5,
+      });
+    }
+  }
+}
+
+function scanTagSegments(
+  items: SemanticItem[],
+  line: number,
+  text: string,
+): void {
+  let segment: RegExpExecArray | null;
+  tagSegmentPattern.lastIndex = 0;
+
+  while ((segment = tagSegmentPattern.exec(text)) !== null) {
+    if (looksLikeLessThanExpression(text, segment.index)) continue;
+
+    const body = segment[1] ?? "";
+    const bodyStart = segment.index + 1;
+    const tagNameMatch = body.match(/^([@$A-Za-z_][\w$-]*|self|this)/);
+    if (tagNameMatch) {
+      const name = tagNameMatch[1] ?? "";
+      addLineToken(items, line, bodyStart, name.length, name === "self" || name === "this" ? "tag" : "tag", {
+        modifiers: modifierNamesToMask([]),
+        priority: 4,
+      });
+    }
+
+    scanTagClassTokens(items, line, body, bodyStart);
+    scanTagEventTokens(items, line, body, bodyStart);
+    scanTagAttributeTokens(items, line, body, bodyStart);
+    scanInlineStyleTokens(items, line, body, bodyStart);
+  }
+}
+
+function looksLikeLessThanExpression(text: string, offset: number): boolean {
+  const previous = text[offset - 1];
+  return typeof previous === "string" && /[$A-Za-z_0-9)\]]/.test(previous);
+}
+
+function scanTagClassTokens(
+  items: SemanticItem[],
+  line: number,
+  body: string,
+  bodyStart: number,
+): void {
+  let match: RegExpExecArray | null;
+  tagClassTokenPattern.lastIndex = 0;
+
+  while ((match = tagClassTokenPattern.exec(body)) !== null) {
+    const prefix = match[1] ?? "";
+    const name = match[2] ?? "";
+    addLineToken(items, line, bodyStart + match.index + prefix.length, name.length, prefix === "#" ? "tagId" : "tagClass", {
+      priority: 6,
+    });
+  }
+}
+
+function scanTagEventTokens(
+  items: SemanticItem[],
+  line: number,
+  body: string,
+  bodyStart: number,
+): void {
+  let match: RegExpExecArray | null;
+  tagEventTokenPattern.lastIndex = 0;
+
+  while ((match = tagEventTokenPattern.exec(body)) !== null) {
+    const name = match[1] ?? "";
+    addLineToken(items, line, bodyStart + match.index + 1, name.length, "event", {
+      priority: 6,
+    });
+  }
+}
+
+function scanTagAttributeTokens(
+  items: SemanticItem[],
+  line: number,
+  body: string,
+  bodyStart: number,
+): void {
+  let match: RegExpExecArray | null;
+  tagAttributeTokenPattern.lastIndex = 0;
+
+  while ((match = tagAttributeTokenPattern.exec(body)) !== null) {
+    const name = match[1] ?? "";
+    const nameStart = bodyStart + match.index + match[0].lastIndexOf(name);
+    if (name.startsWith("@")) continue;
+    if (name === "self" || name === "this") continue;
+
+    addLineToken(items, line, nameStart, name.length, "attribute", {
+      priority: 5,
+    });
+  }
+}
+
+function scanInlineStyleTokens(
+  items: SemanticItem[],
+  line: number,
+  body: string,
+  bodyStart: number,
+): void {
+  const styleStart = body.indexOf("[");
+  const styleEnd = body.indexOf("]", styleStart + 1);
+  if (styleStart === -1 || styleEnd === -1) return;
+
+  const style = body.slice(styleStart + 1, styleEnd);
+  scanStyleProperties(items, line, style, bodyStart + styleStart + 1);
+}
+
+function scanCssLine(
+  items: SemanticItem[],
+  line: number,
+  text: string,
+): void {
+  const trimmed = text.trimStart();
+  if (!trimmed || trimmed.startsWith("#")) return;
+
+  if (/^[.#&:@]/.test(trimmed)) {
+    scanCssSelector(items, line, text, text.length - trimmed.length);
+  }
+
+  const propertyStart = text.length - trimmed.length;
+  if (/^[$A-Za-z_][\w$-]*\s*:/.test(trimmed)) {
+    scanStyleProperties(items, line, trimmed, propertyStart);
+  }
+}
+
+function scanCssSelector(
+  items: SemanticItem[],
+  line: number,
+  text: string,
+  startCharacter: number,
+): void {
+  const selector = text.slice(startCharacter);
+  let match: RegExpExecArray | null;
+  cssSelectorTokenPattern.lastIndex = 0;
+
+  while ((match = cssSelectorTokenPattern.exec(selector)) !== null) {
+    const prefix = match[1];
+    const classOrId = match[2];
+    const element = match[4];
+
+    if (prefix && classOrId) {
+      addLineToken(items, line, startCharacter + match.index + prefix.length, classOrId.length, prefix === "#" ? "tagId" : "tagClass", {
+        priority: 6,
+      });
+    } else if (element && element !== "css") {
+      const leading = match[3]?.length ?? 0;
+      addLineToken(items, line, startCharacter + match.index + leading, element.length, "cssSelector", {
+        priority: 4,
+      });
+    }
+  }
+}
+
+function scanStyleProperties(
+  items: SemanticItem[],
+  line: number,
+  text: string,
+  startCharacter: number,
+): void {
+  let match: RegExpExecArray | null;
+  stylePropertyPattern.lastIndex = 0;
+
+  while ((match = stylePropertyPattern.exec(text)) !== null) {
+    const name = match[1] ?? "";
+    const nameStart = startCharacter + match.index + match[0].lastIndexOf(name);
+    addLineToken(items, line, nameStart, name.length, "cssProperty", {
+      priority: 6,
+    });
+  }
+}
+
+function addLineToken(
+  items: SemanticItem[],
+  line: number,
+  character: number,
+  length: number,
+  type: string,
+  options: {
+    modifiers?: number;
+    priority?: number;
+  } = {},
+): void {
+  if (character < 0 || length <= 0) return;
+
+  items.push({
+    line,
+    character,
+    length,
+    typeIndex: tokenTypeIndex.get(type) ?? tokenTypeIndex.get("variable") ?? 0,
+    modifiers: options.modifiers ?? 0,
+    priority: options.priority ?? 3,
+  });
+}
+
+function declarationSemanticType(keyword: string): string {
+  switch (keyword) {
+    case "class":
+      return "class";
+    case "tag":
+      return "tag";
+    case "prop":
+    case "attr":
+      return "property";
+    default:
+      return "method";
+  }
+}
+
+function modifierNamesToMask(names: string[]): number {
+  let mask = 0;
+
+  for (const name of names) {
+    const index = semanticTokenModifiers.indexOf(
+      name as (typeof semanticTokenModifiers)[number],
+    );
+    if (index >= 0) {
+      mask |= 1 << index;
+    }
+  }
+
+  return mask;
+}
+
+function indentOf(line: string): number {
+  return line.match(/^\t*/)?.[0].length ?? 0;
 }
 
 function modifierMask(

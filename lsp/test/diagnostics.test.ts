@@ -3,15 +3,19 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { compileImba } from "../src/compiler";
-import { buildSemanticTokenData, semanticTokenTypes } from "../src/semantic-tokens";
+import {
+  buildSemanticTokenData,
+  semanticTokenModifiers,
+  semanticTokenTypes,
+} from "../src/semantic-tokens";
 
 const fixturePath = path.resolve(__dirname, "../fixtures/sample.imba");
 
 const validSource = [
   "tag app",
   "\tdef render",
-  "\t\t<div.card @click=save> \"Hi\"",
-  "\tcss .card",
+  "\t\t<div.card data-id=1 @click=save> \"Hi\"",
+  "\tcss section.card",
   "\t\tc:red5",
   "",
 ].join("\n");
@@ -52,7 +56,7 @@ const semanticSource = [
   "\t\t\tdocument.body.style.overflow = 'hidden'",
   "\tdef render",
   "\t\t<self.active @click=save data-id=index [c:red5 bgc:var(--accent)]>",
-  "\tcss .card",
+  "\tcss section.card",
   "\t\tbgc:var(--accent)",
   "",
 ].join("\n");
@@ -60,6 +64,12 @@ const semanticSource = [
 const objectKeySource = [
   "def data item: Item",
   "\treturn {name: 'Ada', score: item.score, active: true}",
+  "",
+].join("\n");
+
+const comparisonSource = [
+  "def compare a, b",
+  "\treturn a<b",
   "",
 ].join("\n");
 
@@ -93,6 +103,7 @@ const objectKeySource = [
 
   assert.ok(seenTokenTypes.has("tag"), "expected tag semantic tokens");
   assert.ok(seenTokenTypes.has("attribute"), "expected attribute semantic tokens");
+  assert.ok(seenTokenTypes.has("tagClass"), "expected tag class semantic tokens");
   assert.ok(seenTokenTypes.has("cssProperty"), "expected CSS property semantic tokens");
   assert.ok(seenTokenTypes.has("cssValue"), "expected CSS value semantic tokens");
   assert.ok(seenTokenTypes.has("method"), "expected method semantic tokens");
@@ -119,10 +130,11 @@ const objectKeySource = [
   assertSemanticTokensAreWellFormed(semanticSource, tokens);
 
   const decoded = decodeSemanticTokens(semanticSource, tokens);
-  assertToken(decoded, "save", "method", 1);
-  assertToken(decoded, "item", "parameter", 1);
+  assertToken(decoded, "app", "tag", 0, ["declaration", "definition"]);
+  assertToken(decoded, "save", "method", 1, ["declaration", "definition"]);
+  assertToken(decoded, "item", "parameter", 1, ["declaration"]);
   assertToken(decoded, "Item", "type", 1);
-  assertToken(decoded, "index", "parameter", 1);
+  assertToken(decoded, "index", "parameter", 1, ["declaration"]);
   assertToken(decoded, "active", "property", 2);
   assertToken(decoded, "reset", "function", 3);
   assertToken(decoded, "commit", "method", 4);
@@ -130,10 +142,16 @@ const objectKeySource = [
   assertToken(decoded, "body", "property", 6);
   assertToken(decoded, "style", "property", 6);
   assertToken(decoded, "overflow", "property", 6);
+  assertToken(decoded, "render", "method", 7, ["declaration", "definition"]);
   assertToken(decoded, "self", "tag", 8);
+  assertToken(decoded, "active", "tagClass", 8);
+  assertToken(decoded, "data-id", "attribute", 8);
   assertToken(decoded, "click", "event", 8);
   assertToken(decoded, "var", "function", 8);
   assertToken(decoded, "--accent", "cssValue", 8);
+  assertToken(decoded, "section", "cssSelector", 9);
+  assertToken(decoded, "card", "tagClass", 9);
+  assertToken(decoded, "bgc", "cssProperty", 10);
 }
 
 {
@@ -152,6 +170,22 @@ const objectKeySource = [
   assertToken(decoded, "score", "objectKey", 1);
   assertToken(decoded, "active", "objectKey", 1);
   assertToken(decoded, "score", "property", 1);
+}
+
+{
+  const uri = pathToFileURL(fixturePath).toString();
+  const document = TextDocument.create(uri, "imba", 1, comparisonSource);
+  const result = compileImba(comparisonSource, fixturePath);
+  assert.equal(result.diagnostics.length, 0);
+  const tokens = buildSemanticTokenData(document, result.compilation);
+  assertSemanticTokensAreWellFormed(comparisonSource, tokens);
+
+  const decoded = decodeSemanticTokens(comparisonSource, tokens);
+  assert.equal(
+    decoded.some((token) => token.text === "b" && token.type === "tag"),
+    false,
+    "less-than expressions must not be scanned as tags",
+  );
 }
 
 console.log("diagnostics.test ok");
@@ -192,6 +226,7 @@ interface DecodedSemanticToken {
   length: number;
   type: string;
   text: string;
+  modifiers: string[];
 }
 
 function decodeSemanticTokens(source: string, data: number[]): DecodedSemanticToken[] {
@@ -216,6 +251,9 @@ function decodeSemanticTokens(source: string, data: number[]): DecodedSemanticTo
       line,
       character,
       length,
+      modifiers: semanticTokenModifiers.filter((_, modifierIndex) =>
+        Boolean(data[index + 4] & (1 << modifierIndex))
+      ),
       type: semanticTokenTypes[data[index + 3]],
       text: lines[line]?.slice(character, character + length) ?? "",
     });
@@ -229,9 +267,16 @@ function assertToken(
   text: string,
   type: string,
   line: number,
+  modifiers: string[] = [],
 ): void {
   assert.ok(
-    tokens.some((token) => token.text === text && token.type === type && token.line === line),
-    `expected ${JSON.stringify(text)} on line ${line + 1} to be ${type}`,
+    tokens.some((token) =>
+      token.text === text &&
+      token.type === type &&
+      token.line === line &&
+      modifiers.every((modifier) => token.modifiers.includes(modifier))
+    ),
+    `expected ${JSON.stringify(text)} on line ${line + 1} to be ${type}` +
+      (modifiers.length > 0 ? ` with ${modifiers.join(",")}` : ""),
   );
 }

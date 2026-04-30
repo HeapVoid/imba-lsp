@@ -32,6 +32,33 @@
     "style": ["variable.special", "variable"]
   },
   {
+    "token_type": "tagClass",
+    "style": ["attribute", "property"]
+  },
+  {
+    "token_type": "tagId",
+    "style": ["attribute", "property"]
+  },
+  {
+    "token_type": "cssSelector",
+    "style": ["tag", "type"]
+  },
+  {
+    "token_type": "parameter",
+    "token_modifiers": ["declaration"],
+    "style": ["variable.parameter", "variable"]
+  },
+  {
+    "token_type": "variable",
+    "token_modifiers": ["declaration"],
+    "style": ["variable"]
+  },
+  {
+    "token_type": "property",
+    "token_modifiers": ["declaration"],
+    "style": ["property", "variable"]
+  },
+  {
     "token_type": "method",
     "token_modifiers": ["declaration"],
     "style": ["function.method", "function"]

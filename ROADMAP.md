@@ -41,7 +41,7 @@ Goal: a small Node/TypeScript LSP that calls native `imba/compiler` and makes Ze
 - [x] Implement initial non-TypeScript `textDocument/completion` for keywords, document symbols, tags, events, CSS shortcuts, and heuristic member names.
 - [x] Implement initial local `textDocument/definition` and `textDocument/hover` for declarations, fields, and typed local class members.
 - [x] Implement initial `textDocument/references` and conservative `textDocument/rename`.
-- [ ] Upgrade semantic tokens to use richer Imba program symbols where available.
+- [x] Upgrade semantic tokens with source-aware Imba ranges for declarations, fields, tag classes, attributes, events, object keys, and CSS selectors/properties.
 - [x] Add Zed language-server registration.
 - [x] Verify diagnostics and LSP startup inside a live Zed dev extension.
 - [ ] Verify semantic token styling inside a live Zed dev extension with Zed semantic tokens enabled.

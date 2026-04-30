@@ -42,6 +42,21 @@ const timingSource = [
   "",
 ].join("\n");
 
+const semanticSource = [
+  "tag app",
+  "\tdef save item: Item, index",
+  "\t\titem.active = true",
+  "\t\treset!",
+  "\t\timba.commit!",
+  "\t\timba.setTimeout(&, 0) do",
+  "\t\t\tdocument.body.style.overflow = 'hidden'",
+  "\tdef render",
+  "\t\t<self.active @click=save data-id=index [c:red5 bgc:var(--accent)]>",
+  "\tcss .card",
+  "\t\tbgc:var(--accent)",
+  "",
+].join("\n");
+
 {
   const result = compileImba(validSource, fixturePath);
   assert.equal(result.diagnostics.length, 0);
@@ -67,10 +82,8 @@ const timingSource = [
   assert.ok(tokens.length > 0, "expected semantic tokens");
   assert.equal(tokens.length % 5, 0, "semantic tokens must be LSP encoded in groups of five");
 
-  const seenTokenTypes = new Set<string>();
-  for (let index = 0; index < tokens.length; index += 5) {
-    seenTokenTypes.add(semanticTokenTypes[tokens[index + 3]]);
-  }
+  const decoded = decodeSemanticTokens(validSource, tokens);
+  const seenTokenTypes = new Set(decoded.map((token) => token.type));
 
   assert.ok(seenTokenTypes.has("tag"), "expected tag semantic tokens");
   assert.ok(seenTokenTypes.has("attribute"), "expected attribute semantic tokens");
@@ -90,11 +103,38 @@ const timingSource = [
   assertSemanticTokensAreWellFormed(timingSource, tokens);
 }
 
+{
+  const uri = pathToFileURL(fixturePath).toString();
+  const document = TextDocument.create(uri, "imba", 1, semanticSource);
+  const result = compileImba(semanticSource, fixturePath);
+  assert.equal(result.diagnostics.length, 0);
+  const tokens = buildSemanticTokenData(document, result.compilation);
+  assert.ok(tokens.length > 0, "expected rich semantic tokens");
+  assertSemanticTokensAreWellFormed(semanticSource, tokens);
+
+  const decoded = decodeSemanticTokens(semanticSource, tokens);
+  assertToken(decoded, "save", "method", 1);
+  assertToken(decoded, "item", "parameter", 1);
+  assertToken(decoded, "Item", "type", 1);
+  assertToken(decoded, "index", "parameter", 1);
+  assertToken(decoded, "active", "property", 2);
+  assertToken(decoded, "reset", "function", 3);
+  assertToken(decoded, "commit", "method", 4);
+  assertToken(decoded, "setTimeout", "method", 5);
+  assertToken(decoded, "body", "property", 6);
+  assertToken(decoded, "style", "property", 6);
+  assertToken(decoded, "overflow", "property", 6);
+  assertToken(decoded, "self", "tag", 8);
+  assertToken(decoded, "click", "event", 8);
+  assertToken(decoded, "var", "function", 8);
+  assertToken(decoded, "--accent", "cssValue", 8);
+}
+
 console.log("diagnostics.test ok");
 
 function assertSemanticTokensAreWellFormed(source: string, data: number[]): void {
   const lines = source.split("\n");
-  const decoded = decodeSemanticTokens(data);
+  const decoded = decodeSemanticTokens(source, data);
 
   let previousLine = -1;
   let previousEnd = 0;
@@ -122,8 +162,17 @@ function assertSemanticTokensAreWellFormed(source: string, data: number[]): void
   }
 }
 
-function decodeSemanticTokens(data: number[]): Array<{ line: number; character: number; length: number }> {
-  const tokens: Array<{ line: number; character: number; length: number }> = [];
+interface DecodedSemanticToken {
+  line: number;
+  character: number;
+  length: number;
+  type: string;
+  text: string;
+}
+
+function decodeSemanticTokens(source: string, data: number[]): DecodedSemanticToken[] {
+  const lines = source.split("\n");
+  const tokens: DecodedSemanticToken[] = [];
   let line = 0;
   let character = 0;
 
@@ -139,8 +188,26 @@ function decodeSemanticTokens(data: number[]): Array<{ line: number; character: 
       character = deltaStart;
     }
 
-    tokens.push({ line, character, length });
+    tokens.push({
+      line,
+      character,
+      length,
+      type: semanticTokenTypes[data[index + 3]],
+      text: lines[line]?.slice(character, character + length) ?? "",
+    });
   }
 
   return tokens;
+}
+
+function assertToken(
+  tokens: DecodedSemanticToken[],
+  text: string,
+  type: string,
+  line: number,
+): void {
+  assert.ok(
+    tokens.some((token) => token.text === text && token.type === type && token.line === line),
+    `expected ${JSON.stringify(text)} on line ${line + 1} to be ${type}`,
+  );
 }

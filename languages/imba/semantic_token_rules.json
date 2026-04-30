@@ -53,7 +53,7 @@
   },
   {
     "token_type": "cssSelector",
-    "style": ["tag", "type"]
+    "style": ["selector", "tag", "type"]
   },
   {
     "token_type": "parameter",

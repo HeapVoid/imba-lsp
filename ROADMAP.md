@@ -7,12 +7,12 @@ Goal: useful Zed-native syntax highlighting and structure support for `.imba` fi
 - [x] Create project README and roadmap.
 - [x] Add a Tree-sitter grammar skeleton.
 - [x] Add indentation-aware external scanner.
-- [x] Add corpus coverage for comments, declarations, tags, CSS, imports, and control flow.
+- [x] Add corpus coverage for the shallow editor grammar: comments, declarations, tags, CSS, simple assignments, and `do` blocks.
 - [x] Add initial Zed language config and query files.
 - [x] Run the grammar against real Imba files from local projects and collect parse errors.
-- [ ] Keep the grammar conservative and recovery-friendly.
+- [x] Keep the grammar conservative and recovery-friendly.
 - [ ] Fix highlighting regressions when they block real editing.
-- [ ] Avoid large grammar-expansion work unless it is needed for Zed queries.
+- [x] Avoid large grammar-expansion work unless it is needed for Zed queries.
 
 ## Phase 2: Native Compiler Analysis
 

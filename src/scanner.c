@@ -7,6 +7,7 @@
 
 enum TokenType {
   NEWLINE,
+  BLOCK_NEWLINE,
   INDENT,
   DEDENT,
 };
@@ -136,7 +137,9 @@ bool tree_sitter_imba_external_scanner_scan(void *payload, TSLexer *lexer, const
     return false;
   }
 
-  if (valid_symbols[NEWLINE] && (lexer->lookahead == '\n' || lexer->lookahead == '\r')) {
+  if ((valid_symbols[NEWLINE] || valid_symbols[BLOCK_NEWLINE]) && (lexer->lookahead == '\n' || lexer->lookahead == '\r')) {
+    Scanner snapshot = *scanner;
+
     if (lexer->lookahead == '\r') {
       advance(lexer, false);
       if (lexer->lookahead == '\n') {
@@ -166,11 +169,23 @@ bool tree_sitter_imba_external_scanner_scan(void *payload, TSLexer *lexer, const
       uint32_t previous = current_indent(scanner);
 
       if (indent > previous) {
+        if (valid_symbols[BLOCK_NEWLINE]) {
+          push_indent(scanner, indent);
+          scanner->pending_indents++;
+          lexer->result_symbol = BLOCK_NEWLINE;
+          return true;
+        }
+
         push_indent(scanner, indent);
         scanner->pending_indents++;
       } else if (indent < previous) {
         queue_dedents_to(scanner, indent);
       }
+    }
+
+    if (!valid_symbols[NEWLINE]) {
+      *scanner = snapshot;
+      return false;
     }
 
     lexer->result_symbol = NEWLINE;

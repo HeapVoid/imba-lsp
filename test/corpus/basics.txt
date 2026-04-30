@@ -1,5 +1,5 @@
 ==================
-Comments and values
+Comments and literals
 ==================
 
 # hello
@@ -16,18 +16,21 @@ comment
 (source_file
   (line_comment)
   (variable_declaration
-    name: (identifier)
-    value: (number))
+    (identifier)
+    (line_fragment)
+    (number))
   (variable_declaration
-    name: (identifier)
-    value: (string))
+    (identifier)
+    (line_fragment)
+    (string))
   (variable_declaration
-    name: (identifier)
-    value: (boolean))
+    (identifier)
+    (line_fragment)
+    (boolean))
   (block_comment))
 
 ==================
-Declarations
+Declarations and shallow blocks
 ==================
 
 export def greet name
@@ -39,46 +42,45 @@ class Person
 		console.log("hi")
 
 tag user-card
-	name = "Ada"
+	icon = 'mining'
 	get title
-		name
+		icon
 
 ---
 
 (source_file
   (function_declaration
     (export_modifier)
-    name: (identifier)
-    (parameter
-      name: (identifier))
+    (identifier)
+    (identifier)
     (block
       (expression_statement
         (string))))
   (class_declaration
-    name: (identifier)
+    (identifier)
     (block
       (assignment
-        left: (identifier)
-        right: (string))
+        (identifier)
+        (assignment_operator)
+        (string))
       (function_declaration
-        name: (identifier)
+        (identifier)
         (block
           (expression_statement
-            (call_expression
-              function: (member_expression
-                object: (identifier)
-                property: (identifier))
-              arguments: (arguments
-                (string))))))))
+            (member_path
+              (identifier)
+              (member_operator)
+              (identifier))
+            (string))))))
   (tag_declaration
-    name: (identifier)
+    (identifier)
     (block
       (assignment
-        left: (identifier)
-        right: (string))
+        (identifier)
+        (assignment_operator)
+        (string))
       (accessor_declaration
-        name: (identifier)
+        (identifier)
         (block
           (expression_statement
             (identifier)))))))
-

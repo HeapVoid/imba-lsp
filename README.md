@@ -20,7 +20,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - numbers, booleans, nil-like constants
 - Imba identifiers with `?`, `!`, and dashed names
 - indentation tokens and indentation blocks
-- `def`, `get`, `set`, `class`, `tag`, `css`, import/export, control-flow statements
+- a deliberately shallow Tree-sitter editor grammar for `def`, `get`, `set`, `class`, `tag`, `css`, imports, variables, assignments, tags, and `do` blocks
 - basic Imba tags such as `<self>`, `<div.card>`, attributes, events, and inline style brackets
 - initial Zed queries for highlights, brackets, indents, outline, and CSS-block injection
 - CSS blocks inject into a hidden `Imba CSS` Zed language so Imba CSS keeps hard-tab indentation without changing global CSS editor settings
@@ -51,7 +51,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - project-wide diagnostics register `.imba` file watchers when the client supports them, refresh changed/created files quickly, and clear deleted-file diagnostics
 - TypeScript diagnostics load Imba runtime typings for compiled JS and can be checked by `lsp:probe -- --typescript-diagnostics`
 
-The Tree-sitter grammar is not a complete Imba parser, and it should not be expanded as though it were the main semantic parser. The LSP calls `imba/compiler` directly and keeps the compiler result as document state.
+The Tree-sitter grammar is not a complete Imba parser, and it should not be expanded as though it were the main semantic parser. It intentionally avoids a full expression/control-flow AST; the LSP calls `imba/compiler` directly and keeps the compiler result as document state.
 
 ## Development
 

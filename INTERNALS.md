@@ -11,6 +11,26 @@ The project has two parsing layers:
 
 Do not try to turn `grammar.js` into a full Imba parser. Imba syntax depends on the native lexer, rewriter, Jison parser, and compiler pipeline. Tree-sitter should stay conservative and recovery-friendly.
 
+## Tree-sitter Contract
+
+`grammar.js` is intentionally shallow. It should keep only editor-safe structure:
+
+- comments, strings, template strings, regexes, numbers, booleans, and nil-like constants;
+- indentation blocks and `do` line blocks;
+- declaration shells for `def`, `get`, `set`, `class`, and `tag`;
+- simple import, variable, field, and assignment lines;
+- basic tag forms, attributes, events, class/id/reference shorthands, and inline style brackets;
+- Imba CSS blocks, selectors, at-rules, declarations, and inline CSS-ish rows.
+
+It should not model the full expression grammar, control-flow semantics, object/array syntax, TypeScript-ish types, call precedence, or Imba rewriter behavior. Those belong to the compiler-backed LSP. Corpus tests should defend the shallow editor contract, not real-language completeness.
+
+The external scanner has two newline tokens on purpose:
+
+- `_newline` is an ordinary line separator and may keep, reduce, or close indentation.
+- `_block_newline` is only for a real block opener, where the next structural line is more indented.
+
+Do not collapse them. A plain optional `block` after tags makes empty tag lines like `<div>` fight with nested tag blocks like `<div>\n\t<span>`, because Tree-sitter otherwise wants to shift the newline before it knows whether indentation increased.
+
 ## Zed Extension Loading
 
 The dev extension is installed as a symlink:

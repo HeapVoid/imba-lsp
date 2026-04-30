@@ -1,54 +1,23 @@
 [
-  "and"
-  "as"
-  "await"
-  "break"
-  "catch"
+  "attr"
   "class"
   "const"
-  "continue"
   "css"
-  "delete"
   "def"
   "default"
   "do"
-  "elif"
-  "else"
   "export"
-  "extends"
-  "finally"
-  "for"
-  "from"
   "get"
   "global"
-  "if"
   "import"
-  "in"
-  "instanceof"
-  "isa"
-  "is"
-  "isnt"
   "let"
-  "new"
-  "not"
-  "of"
-  "or"
-  "own"
   "prop"
-  "return"
   "set"
   "tag"
-  "then"
-  "throw"
-  "typeof"
-  "try"
-  "until"
-  "unless"
   "var"
-  "void"
-  "when"
-  "while"
 ] @keyword
+
+(keyword) @keyword
 
 [
   "true"
@@ -81,13 +50,6 @@
 (accessor_declaration
   name: (_) @function)
 
-(call_expression
-  function: (identifier) @function.call)
-
-(call_expression
-  function: (member_expression
-    property: (identifier) @function.method))
-
 (class_declaration
   name: (identifier) @type)
 
@@ -103,25 +65,8 @@
 (assignment
   left: (identifier) @variable)
 
-(member_expression
+(member_path
   property: (identifier) @property)
-
-(pair
-  key: (_) @property)
-
-(object_block_entry
-  key: (_) @property)
-
-(shorthand_property) @property
-
-(parameter
-  name: (_) @variable.parameter)
-
-(do_parameter
-  name: (_) @variable.parameter)
-
-(type_annotation
-  type: (_) @type)
 
 (private_identifier) @variable.special
 "self" @variable.special
@@ -129,6 +74,7 @@
 (tag_element
   name: (tag_name_open) @tag)
 
+(tag_close) @punctuation.bracket
 (tag_class_open) @attribute
 (tag_id_open) @attribute
 (tag_reference_open) @variable.special
@@ -148,18 +94,14 @@
   "@" @keyword
   name: (event_name) @function)
 
-(decorator
-  "@" @keyword
-  name: (identifier) @attribute)
-
 (inline_style) @embedded
 (style_content) @embedded
 
-(css_selector) @tag
-(css_complex_selector) @tag
-(css_custom_selector) @tag
-(css_class_selector) @tag
-(css_element_selector) @tag
+(css_selector) @selector
+(css_complex_selector) @selector
+(css_custom_selector) @selector
+(css_class_selector) @selector
+(css_element_selector) @selector
 (css_inline_content) @string.special
 (css_inline_rule_with_block
   content: (css_inline_content) @string.special)
@@ -168,38 +110,9 @@
 (style_property_name) @property
 (css_value) @string.special
 
-[
-  "="
-  "+="
-  "-="
-  "*="
-  "/="
-  "?="
-  "||="
-  "&&="
-  "=?"
-  "++"
-  "--"
-  "+"
-  "-"
-  "*"
-  "/"
-  "%"
-  "=="
-  "!="
-  "==="
-  "!=="
-  "<"
-  "<="
-  ">"
-  ">="
-  "!"
-  "."
-  ".."
-] @operator
-
-(less_than) @operator
-(shift_left) @operator
+(assignment_operator) @operator
+(member_operator) @operator
+(operator) @operator
 
 [
   "("

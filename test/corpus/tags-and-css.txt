@@ -6,42 +6,7 @@ tag app-root
 	<self>
 		<div.card @click=save name="demo" [d:flex g:8px]>
 			<span.title> title
-
----
-
-(source_file
-  (tag_declaration
-    name: (identifier)
-    (block
-      (tag_element
-        name: (tag_name_open)
-        (block
-          (tag_element
-            name: (tag_name_open)
-            (tag_class)
-            (event_attribute
-              name: (event_name)
-              value: (attribute_value
-                (identifier)))
-            (tag_attribute
-              name: (attribute_name)
-              value: (attribute_value
-                (string)))
-            (inline_style
-              (style_content))
-            (block
-              (tag_element
-                name: (tag_name_open)
-                (tag_class)
-                (identifier)))))))))
-
-==================
-Event value before inline style
-==================
-
-tag app-root
-	<self>
-		<div.card @click=save [d:flex g:8px]>
+		<div.empty>
 
 ---
 
@@ -51,6 +16,7 @@ tag app-root
     (block
       (tag_element
         (tag_name_open)
+        (tag_close)
         (block
           (tag_element
             (tag_name_open)
@@ -59,8 +25,24 @@ tag app-root
               (event_name)
               (attribute_value
                 (identifier)))
+            (tag_attribute
+              (attribute_name)
+              (attribute_value
+                (bare_attribute_value)))
             (inline_style
-              (style_content))))))))
+              (style_content))
+            (tag_close)
+            (block
+              (tag_element
+                (tag_name_open)
+                (tag_class)
+                (tag_close))
+              (expression_statement
+                (identifier))))
+          (tag_element
+            (tag_name_open)
+            (tag_class)
+            (tag_close)))))))
 
 ==================
 CSS blocks
@@ -70,8 +52,11 @@ tag app-root
 	css self
 		d:flex
 		g:8px
+		h1
+			fs:24px
 		.title
 			c:blue6
+			&:hover opacity: 0.9
 		# Narrow layout
 		@media (max-width: 800px)
 			d:block
@@ -80,28 +65,82 @@ tag app-root
 
 (source_file
   (tag_declaration
-    name: (identifier)
+    (identifier)
     (block
       (css_statement
         (css_block
           (css_declaration
-            property: (style_property_name)
-            value: (css_value))
+            (style_property_name)
+            (css_value))
           (css_declaration
-            property: (style_property_name)
-            value: (css_value))
+            (style_property_name)
+            (css_value))
           (css_rule
-            selector: (css_selector
+            (css_selector
+              (css_element_selector))
+            (css_block
+              (css_declaration
+                (style_property_name)
+                (css_value))))
+          (css_rule
+            (css_selector
               (css_class_selector))
             (css_block
               (css_declaration
-                property: (style_property_name)
-                value: (css_value))))
+                (style_property_name)
+                (css_value))
+              (css_inline_rule
+                (css_inline_content))))
           (css_comment)
           (css_at_rule
-            name: (css_at_keyword)
-            value: (css_at_value)
+            (css_at_keyword)
+            (css_at_value)
             (css_block
               (css_declaration
-                property: (style_property_name)
-                value: (css_value)))))))))
+                (style_property_name)
+                (css_value)))))))))
+
+==================
+Recovery friendly lines
+==================
+
+def mount
+	imba.setTimeout(&, 0) do
+		fakeOn = true
+	document.body.style.overflow = 'hidden'
+	return if !ready?
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (block
+      (line_block_statement
+        (member_path
+          (identifier)
+          (member_operator)
+          (identifier))
+        (line_fragment)
+        (number)
+        (block
+          (assignment
+            (identifier)
+            (assignment_operator)
+            (boolean))))
+      (assignment
+        (member_path
+          (identifier)
+          (member_operator)
+          (identifier)
+          (member_operator)
+          (identifier)
+          (member_operator)
+          (identifier))
+        (assignment_operator)
+        (string))
+      (expression_statement
+        (keyword)
+        (keyword)
+        (operator)
+        (identifier)))))

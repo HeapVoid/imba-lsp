@@ -193,6 +193,9 @@ const validSource = [
   "",
   "class Person",
   "\tnickname = 'Ada'",
+  "\tfoo-bar = 1",
+  "\tget ready?",
+  "\t\treturn true",
   "\tdef greet",
   "\t\treturn \"hi\"",
   "",
@@ -466,6 +469,19 @@ async function main(): Promise<void> {
     );
     assert.ok(classMemberCompletion.has("greet"));
     assert.ok(classMemberCompletion.has("nickname"));
+    assert.ok(classMemberCompletion.has("foo-bar"));
+    assert.ok(classMemberCompletion.has("ready?"));
+    assert.equal(classMemberCompletion.has("fooΞbar"), false);
+    assert.equal(classMemberCompletion.has("readyΦ"), false);
+
+    const readyCompletion = completionItem(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "person."),
+      }),
+      "ready?",
+    );
+    assert.equal(completionTextEditNewText(readyCompletion), "ready?");
 
     const importedClassMemberCompletion = completionLabels(
       await client.request("textDocument/completion", {

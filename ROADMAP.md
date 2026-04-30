@@ -61,6 +61,7 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 - [x] Map cross-file TypeScript definitions from virtual compiled JS back to Imba source ranges.
 - [x] Reuse virtual Imba module metadata for hover documentation and more precise imported symbol ranges.
 - [x] Publish TypeScript diagnostics for the open document with compiled JS ranges mapped back to Imba source.
+- [x] Decode compiler-mangled Imba member names in TypeScript completions.
 - [ ] Expand completion with richer Imba-aware post-processing for generated JS names.
 - [ ] Add richer docs/comment extraction for Imba hovers.
 - [ ] Expand TypeScript diagnostics to project/imported `.imba` files without noisy duplicate publishes.

@@ -9,6 +9,7 @@ import {
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import * as ts from "typescript";
 import { compileImba, type ImbaCompilation } from "./compiler";
+import { isGeneratedInternalIdentifier, toImbaIdentifier } from "./imba-identifiers";
 import { generatedOffsetToSourceOffset, sourceOffsetToGeneratedOffset } from "./source-map";
 import { createTypeScriptLanguageService } from "./typescript-service";
 
@@ -137,16 +138,21 @@ function buildLanguageServiceCompletionItems(
 
   return completions.entries
     .filter((entry) => isUsefulEntry(entry))
-    .map((entry) => ({
-      label: entry.name,
-      kind: completionKind(entry.kind),
-      detail: "TypeScript",
-      textEdit: TextEdit.replace(
-        replacementRangeForEntry(entry, options),
-        entry.insertText ?? entry.name,
-      ),
-      sortText: `05_ts_${entry.name}`,
-    }));
+    .map((entry) => {
+      const label = toImbaIdentifier(entry.name);
+      const newText = toImbaIdentifier(entry.insertText ?? entry.name);
+
+      return {
+        label,
+        kind: completionKind(entry.kind),
+        detail: "TypeScript",
+        textEdit: TextEdit.replace(
+          replacementRangeForEntry(entry, options),
+          newText,
+        ),
+        sortText: `05_ts_${label}`,
+      };
+    });
 }
 
 function replacementRangeForEntry(
@@ -198,6 +204,7 @@ function isUsefulEntry(entry: ts.CompletionEntry): boolean {
   if (entry.kind === ts.ScriptElementKind.warning) return false;
   if (entry.name === marker) return false;
   if (entry.name.startsWith("__")) return false;
+  if (isGeneratedInternalIdentifier(entry.name)) return false;
   return true;
 }
 

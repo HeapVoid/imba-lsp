@@ -29,6 +29,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - initial semantic tokens from native compiler tokens
 - initial non-TypeScript completions for keywords, document symbols, tags, events, CSS shortcuts, and heuristic member names
 - initial TypeScript-backed member completions for compiled Imba expressions such as DOM APIs and local class instances
+- TypeScript-backed member completions decode compiler-mangled Imba identifiers such as `readyΦ` and `fooΞbar` back to `ready?` and `foo-bar`
 - initial local hover and go-to-definition for Imba declarations, fields, and typed local class members
 - initial TypeScript-backed hover and go-to-definition for JS-compatible browser/global expressions
 - initial span-based mapping from Imba source offsets to generated JS offsets via native `locs.spans`

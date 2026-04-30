@@ -187,8 +187,12 @@ const validSource = [
   "\t\tc:blue5",
   "",
   "class Person",
+  "\tnickname = 'Ada'",
   "\tdef greet",
   "\t\treturn \"hi\"",
+  "",
+  "let person = new Person",
+  "person.greet",
   "",
 ].join("\n");
 
@@ -305,6 +309,23 @@ async function main(): Promise<void> {
     );
     assert.ok(memberCompletion.has("body"));
     assert.ok(memberCompletion.has("style"));
+
+    const domCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "document.body.style."),
+      }),
+    );
+    assert.ok(domCompletion.has("backgroundColor"));
+
+    const classMemberCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "person."),
+      }),
+    );
+    assert.ok(classMemberCompletion.has("greet"));
+    assert.ok(classMemberCompletion.has("nickname"));
 
     const eventCompletion = completionLabels(
       await client.request("textDocument/completion", {

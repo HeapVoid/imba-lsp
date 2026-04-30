@@ -105,7 +105,12 @@ connection.onCompletion((params) => {
 
   const state = documentState.get(document.uri);
   const compilation = state?.version === document.version ? state.result.compilation : undefined;
-  return buildCompletionItems(document, params.position, compilation);
+  return buildCompletionItems(
+    document,
+    params.position,
+    filePathFromUri(document.uri),
+    compilation,
+  );
 });
 
 function scheduleValidation(document: TextDocument): void {

@@ -50,9 +50,9 @@ Goal: a small Node/TypeScript LSP that calls native `imba/compiler` and makes Ze
 
 Goal: completion, hover, and navigation that understand compiled Imba output.
 
-- [ ] Reuse Imba compiler output and `locs.spans`.
-- [ ] Create or embed a TypeScript LanguageService bridge.
-- [ ] Implement completion with Imba-aware post-processing.
+- [x] Reuse Imba compiler output for a first TypeScript-backed member completion path.
+- [x] Create a minimal TypeScript LanguageService bridge for synthetic compiled JS completions.
+- [ ] Expand completion with Imba-aware post-processing and source-map/span-backed replacement ranges.
 - [ ] Implement hover and go-to-definition with position mapping.
 - [ ] Port useful diagnostics/codefix behavior from `typescript-imba-plugin` as reference, with license checks before copying anything.
 

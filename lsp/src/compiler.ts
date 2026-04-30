@@ -91,12 +91,17 @@ export function resolveImbaCompiler(sourcePath: string | null): CompilerResoluti
   }
 }
 
-export function compileImba(source: string, sourcePath: string | null): CompileResult {
+export function compileImba(
+  source: string,
+  sourcePath: string | null,
+  options: Record<string, unknown> = {},
+): CompileResult {
   const resolution = resolveImbaCompiler(sourcePath);
 
   try {
     const compilation = resolution.compiler.compile(source, {
       sourcePath: sourcePath ?? undefined,
+      ...options,
     });
 
     return {

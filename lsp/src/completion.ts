@@ -5,6 +5,7 @@ import {
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { ImbaCompilation } from "./compiler";
+import { buildTypeScriptCompletionItems } from "./typescript-completion";
 
 export const completionTriggerCharacters = [".", "@", "<", ":", "[", " "] as const;
 
@@ -235,6 +236,7 @@ const commonMembers = [
 export function buildCompletionItems(
   document: TextDocument,
   position: Position,
+  sourcePath: string | null,
   compilation: ImbaCompilation | undefined,
 ): CompletionItem[] {
   const source = document.getText();
@@ -273,6 +275,7 @@ export function buildCompletionItems(
 
   if (isMemberContext(prefix)) {
     return uniqueItems([
+      ...buildTypeScriptCompletionItems(document, position, sourcePath),
       ...symbols.members,
       ...commonMembers.map((member) => item(member, CompletionItemKind.Property, "Common member", "40")),
     ]);

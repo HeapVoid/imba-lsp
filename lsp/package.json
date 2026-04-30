@@ -15,11 +15,11 @@
   },
   "dependencies": {
     "imba": "2.0.0-alpha.247",
+    "typescript": "^5.9.3",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "typescript": "^5.9.0"
+    "@types/node": "^24.0.0"
   }
 }

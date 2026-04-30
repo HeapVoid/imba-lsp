@@ -3,6 +3,12 @@ set -euo pipefail
 
 npm run lsp:build
 
+if ! command -v cargo >/dev/null 2>&1 && [ -f "$HOME/.cargo/env" ]; then
+	# rustup can be installed without modifying the parent process PATH.
+	# shellcheck disable=SC1090
+	. "$HOME/.cargo/env"
+fi
+
 if ! command -v cargo >/dev/null 2>&1; then
 	echo "Skipping Rust adapter check; cargo is not available on PATH." >&2
 	exit 0

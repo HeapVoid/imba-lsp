@@ -5,6 +5,11 @@ schema_version = 1
 authors = ["Heap Void"]
 description = "Imba language support for Zed"
 repository = "https://github.com/imba/imba-lsp"
+languages = ["languages/imba"]
+
+[lib]
+kind = "Rust"
+version = "0.7.0"
 
 [language_servers.imba-lsp]
 name = "Imba LSP"

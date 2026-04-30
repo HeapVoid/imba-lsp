@@ -53,6 +53,7 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 
 - [x] Reuse Imba compiler output for a first TypeScript-backed member completion path.
 - [x] Create a minimal TypeScript LanguageService bridge for synthetic compiled JS completions.
+- [x] Add TypeScript-backed hover and go-to-definition fallback for JS-compatible browser/global expressions.
 - [ ] Expand completion with Imba-aware post-processing and source-map/span-backed replacement ranges.
 - [ ] Expand hover and go-to-definition with TypeScript position mapping and cross-file targets.
 - [ ] Port useful diagnostics/codefix behavior from `typescript-imba-plugin` as reference, with license checks before copying anything.

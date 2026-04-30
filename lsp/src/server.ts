@@ -120,14 +120,18 @@ connection.onDefinition((params) => {
   const document = documents.get(params.textDocument.uri);
   if (!document) return [];
 
-  return buildDefinitionLocations(document, params.position);
+  return buildDefinitionLocations(
+    document,
+    params.position,
+    filePathFromUri(document.uri),
+  );
 });
 
 connection.onHover((params) => {
   const document = documents.get(params.textDocument.uri);
   if (!document) return null;
 
-  return buildHover(document, params.position);
+  return buildHover(document, params.position, filePathFromUri(document.uri));
 });
 
 function scheduleValidation(document: TextDocument): void {

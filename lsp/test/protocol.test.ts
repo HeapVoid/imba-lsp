@@ -316,6 +316,31 @@ async function main(): Promise<void> {
     );
     assert.match(greetHover, /Imba method `Person\.greet`/);
 
+    const navigatorHover = hoverText(
+      await client.request("textDocument/hover", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "navigator.userAgent"),
+      }),
+    );
+    assert.match(navigatorHover, /NavigatorID\.userAgent/);
+    assert.match(navigatorHover, /string/);
+
+    const overflowHover = hoverText(
+      await client.request("textDocument/hover", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "document.body.style.overflow"),
+      }),
+    );
+    assert.match(overflowHover, /CSSStyleDeclaration\.overflow/);
+
+    const navigatorDefinitionUris = locationUris(
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "navigator.userAgent"),
+      }),
+    );
+    assert.ok(navigatorDefinitionUris.some((item) => item.endsWith("lib.dom.d.ts")));
+
     const semanticTokens = (await client.request("textDocument/semanticTokens/full", {
       textDocument: { uri },
     })) as { data?: number[] };
@@ -467,6 +492,13 @@ function locationTexts(source: string, result: unknown): Set<string> {
       .filter((range): range is LspRange => Boolean(range))
       .map((range) => rangeText(source, range)),
   );
+}
+
+function locationUris(result: unknown): string[] {
+  const locations = Array.isArray(result) ? result : result ? [result] : [];
+  return locations
+    .map((location) => (location as { uri?: unknown }).uri)
+    .filter((uri): uri is string => typeof uri === "string");
 }
 
 function hoverText(result: unknown): string {

@@ -6,6 +6,10 @@ import {
   type Position,
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
+import {
+  buildTypeScriptDefinitionLocations,
+  buildTypeScriptHover,
+} from "./typescript-navigation";
 
 type SymbolKind = "class" | "tag" | "method" | "property" | "field" | "local";
 
@@ -50,21 +54,29 @@ const wordCharacterPattern = /[$A-Za-z_0-9?!:-]/;
 export function buildDefinitionLocations(
   document: TextDocument,
   position: Position,
+  sourcePath: string | null,
 ): Location[] {
   const token = tokenAtPosition(document, position);
-  if (!token) return [];
+  if (!token) return buildTypeScriptDefinitionLocations(document, position, sourcePath);
 
-  return resolveSymbols(document, position, token).map((symbol) =>
+  const localLocations = resolveSymbols(document, position, token).map((symbol) =>
     Location.create(document.uri, symbol.range),
   );
+  if (localLocations.length > 0) return localLocations;
+
+  return buildTypeScriptDefinitionLocations(document, position, sourcePath);
 }
 
-export function buildHover(document: TextDocument, position: Position): Hover | null {
+export function buildHover(
+  document: TextDocument,
+  position: Position,
+  sourcePath: string | null,
+): Hover | null {
   const token = tokenAtPosition(document, position);
-  if (!token) return null;
+  if (!token) return buildTypeScriptHover(document, position, sourcePath);
 
   const symbol = resolveSymbols(document, position, token)[0];
-  if (!symbol) return null;
+  if (!symbol) return buildTypeScriptHover(document, position, sourcePath);
 
   return {
     contents: {

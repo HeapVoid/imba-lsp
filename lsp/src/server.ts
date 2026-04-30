@@ -2,8 +2,11 @@ import path from "node:path";
 import {
   createConnection,
   DiagnosticSeverity,
+  DidChangeWatchedFilesNotification,
+  FileChangeType,
   ProposedFeatures,
   TextDocumentSyncKind,
+  WatchKind,
   type Diagnostic,
   type InitializeParams,
   type InitializeResult,
@@ -20,7 +23,9 @@ import {
   prepareRename,
 } from "./navigation";
 import {
+  buildProjectDiagnosticFile,
   buildProjectDiagnostics,
+  isProjectImbaFile,
   type ProjectDiagnosticFile,
 } from "./project-diagnostics";
 import {
@@ -36,6 +41,7 @@ import {
 import { filePathFromUri } from "./uri";
 
 const validationDelayMs = 120;
+const projectFileValidationDelayMs = 180;
 const projectValidationDelayMs = 1200;
 
 const connection = createConnection(ProposedFeatures.all);
@@ -48,14 +54,18 @@ interface DocumentState {
 
 const documentState = new Map<string, DocumentState>();
 const pendingValidation = new Map<string, NodeJS.Timeout>();
+const pendingProjectFileValidation = new Map<string, NodeJS.Timeout>();
 const pendingProjectValidation = new Map<string, NodeJS.Timeout>();
 const publishedDiagnostics = new Map<string, string>();
 const projectDiagnosticUris = new Map<string, Set<string>>();
 let workspaceRootPath: string | null = null;
 let projectValidationRun = 0;
+let canRegisterWatchedFiles = false;
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   workspaceRootPath = workspaceRootFromInitialize(params);
+  canRegisterWatchedFiles =
+    params.capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration === true;
 
   return {
     capabilities: {
@@ -90,6 +100,8 @@ connection.onInitialized(() => {
   if (workspaceRootPath) {
     scheduleProjectValidation(workspaceRootPath);
   }
+
+  registerWatchedFiles();
 });
 
 documents.onDidOpen((event) => {
@@ -117,9 +129,39 @@ documents.onDidClose((event) => {
   scheduleProjectValidationForUri(event.document.uri);
 });
 
+connection.onDidChangeWatchedFiles((params) => {
+  const changedRoots = new Set<string>();
+
+  for (const change of params.changes) {
+    const sourcePath = filePathFromUri(change.uri);
+    const rootPath = projectRootFor(sourcePath);
+    if (!sourcePath || !rootPath || !isProjectImbaFile(rootPath, sourcePath)) {
+      continue;
+    }
+
+    changedRoots.add(rootPath);
+
+    if (change.type === FileChangeType.Deleted) {
+      clearPendingProjectFileValidation(change.uri);
+      clearProjectFileDiagnostics(rootPath, change.uri);
+      continue;
+    }
+
+    scheduleProjectFileValidation(rootPath, change.uri);
+  }
+
+  for (const rootPath of changedRoots) {
+    scheduleProjectValidation(rootPath);
+  }
+});
+
 connection.onShutdown(() => {
   for (const uri of pendingValidation.keys()) {
     clearPendingValidation(uri);
+  }
+
+  for (const uri of pendingProjectFileValidation.keys()) {
+    clearPendingProjectFileValidation(uri);
   }
 
   for (const rootPath of pendingProjectValidation.keys()) {
@@ -289,6 +331,17 @@ function scheduleProjectValidation(rootPath: string): void {
   pendingProjectValidation.set(rootPath, timer);
 }
 
+function scheduleProjectFileValidation(rootPath: string, uri: string): void {
+  clearPendingProjectFileValidation(uri);
+
+  const timer = setTimeout(() => {
+    pendingProjectFileValidation.delete(uri);
+    void validateProjectFile(rootPath, uri);
+  }, projectFileValidationDelayMs);
+
+  pendingProjectFileValidation.set(uri, timer);
+}
+
 async function validateProject(rootPath: string): Promise<void> {
   const run = ++projectValidationRun;
   const openUris = new Set(documents.keys());
@@ -296,6 +349,29 @@ async function validateProject(rootPath: string): Promise<void> {
   if (run !== projectValidationRun) return;
 
   publishProjectDiagnostics(rootPath, results);
+}
+
+async function validateProjectFile(rootPath: string, uri: string): Promise<void> {
+  const sourcePath = filePathFromUri(uri);
+  if (!sourcePath || documents.get(uri)) return;
+
+  if (!isProjectImbaFile(rootPath, sourcePath)) {
+    clearProjectFileDiagnostics(rootPath, uri);
+    return;
+  }
+
+  const result = await buildProjectDiagnosticFile(sourcePath);
+  if (documents.get(uri)) return;
+
+  if (!result) {
+    clearProjectFileDiagnostics(rootPath, uri);
+    return;
+  }
+
+  rememberProjectDiagnosticUri(rootPath, result.uri);
+  if (result.diagnostics.length > 0 || publishedDiagnostics.has(result.uri)) {
+    publishDiagnostics(result.uri, undefined, result.diagnostics);
+  }
 }
 
 function publishProjectDiagnostics(
@@ -322,6 +398,21 @@ function publishProjectDiagnostics(
   }
 
   projectDiagnosticUris.set(rootPath, seen);
+}
+
+function clearProjectFileDiagnostics(rootPath: string, uri: string): void {
+  projectDiagnosticUris.get(rootPath)?.delete(uri);
+
+  if (documents.get(uri)) return;
+  if (!publishedDiagnostics.has(uri)) return;
+
+  publishDiagnostics(uri, undefined, []);
+}
+
+function rememberProjectDiagnosticUri(rootPath: string, uri: string): void {
+  const uris = projectDiagnosticUris.get(rootPath) ?? new Set<string>();
+  uris.add(uri);
+  projectDiagnosticUris.set(rootPath, uris);
 }
 
 function hasCompilerErrors(result: CompileResult): boolean {
@@ -358,6 +449,14 @@ function clearPendingValidation(uri: string): void {
   }
 }
 
+function clearPendingProjectFileValidation(uri: string): void {
+  const timer = pendingProjectFileValidation.get(uri);
+  if (timer) {
+    clearTimeout(timer);
+    pendingProjectFileValidation.delete(uri);
+  }
+}
+
 function clearPendingProjectValidation(rootPath: string): void {
   const timer = pendingProjectValidation.get(rootPath);
   if (timer) {
@@ -376,6 +475,22 @@ function projectRootFor(sourcePath: string | null): string | null {
   if (!sourcePath) return null;
 
   return path.dirname(sourcePath);
+}
+
+function registerWatchedFiles(): void {
+  if (!canRegisterWatchedFiles) return;
+
+  void connection.client.register(DidChangeWatchedFilesNotification.type, {
+    watchers: [
+      {
+        globPattern: "**/*.imba",
+        kind: WatchKind.Create | WatchKind.Change | WatchKind.Delete,
+      },
+    ],
+  }).catch(() => {
+    // Some clients claim dynamic registration but reject watched-file
+    // registration. Diagnostics still work through open/save and full scans.
+  });
 }
 
 function publishOpenImportedDiagnostics(

@@ -73,6 +73,7 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 - [x] Expand completion with richer Imba-aware post-processing for generated JS names.
 - [ ] Expand docs extraction beyond directly preceding `#` comments.
 - [x] Expand TypeScript diagnostics to unopened project/imported `.imba` files without noisy duplicate publishes.
+- [x] Refresh project-wide diagnostics from `.imba` file watcher create/change/delete events.
 - [ ] Port useful codefix behavior from `typescript-imba-plugin` as reference, with license checks before copying anything.
 
 ## Known Risks

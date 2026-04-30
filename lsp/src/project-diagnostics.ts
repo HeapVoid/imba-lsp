@@ -34,7 +34,7 @@ export async function buildProjectDiagnostics(
     const uri = pathToFileURL(file).toString();
     if (openUris.has(uri)) continue;
 
-    const result = await buildProjectDiagnosticFile(file, uri);
+    const result = await buildProjectDiagnosticFile(file);
     if (result) {
       results.push(result);
     }
@@ -49,11 +49,11 @@ export async function collectProjectImbaFiles(rootPath: string): Promise<string[
   return [...files].sort();
 }
 
-async function buildProjectDiagnosticFile(
+export async function buildProjectDiagnosticFile(
   file: string,
-  uri: string,
 ): Promise<ProjectDiagnosticFile | null> {
   try {
+    const uri = pathToFileURL(file).toString();
     const source = await fs.readFile(file, "utf8");
     const document = TextDocument.create(uri, "imba", 0, source);
     const result = compileImba(source, file, {
@@ -74,6 +74,15 @@ async function buildProjectDiagnosticFile(
   } catch {
     return null;
   }
+}
+
+export function isProjectImbaFile(rootPath: string, file: string): boolean {
+  if (!file.endsWith(".imba")) return false;
+
+  const relative = path.relative(path.resolve(rootPath), path.resolve(file));
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return false;
+
+  return !relative.split(path.sep).some((part) => ignoredDirectories.has(part));
 }
 
 async function collectImbaFilesIn(target: string, files: Set<string>): Promise<void> {

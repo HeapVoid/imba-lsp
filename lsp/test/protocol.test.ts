@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 interface JsonRpcMessage {
   jsonrpc: "2.0";
-  id?: number;
+  id?: number | string;
   method?: string;
   params?: unknown;
   result?: unknown;
@@ -141,6 +141,11 @@ class LspClient {
   }
 
   private handleMessage(message: JsonRpcMessage): void {
+    if (message.id !== undefined && message.method) {
+      this.handleServerRequest(message);
+      return;
+    }
+
     if (typeof message.id === "number") {
       const pending = this.pending.get(message.id);
       if (!pending) return;
@@ -167,6 +172,14 @@ class LspClient {
       waiter.resolve(message);
     }
   }
+
+  private handleServerRequest(message: JsonRpcMessage): void {
+    this.write({
+      jsonrpc: "2.0",
+      id: message.id,
+      result: null,
+    });
+  }
 }
 
 const serverPath = path.resolve(__dirname, "../src/server.js");
@@ -175,6 +188,18 @@ const uri = pathToFileURL(fixturePath).toString();
 const projectProblemPath = path.resolve(__dirname, "../../test/fixtures/project-wide-error.imba");
 const projectProblemUri = pathToFileURL(projectProblemPath).toString();
 
+const projectProblemSource = [
+  "tag broken",
+  "\tdef render",
+  "\t\treturn if",
+  "",
+].join("\n");
+const cleanProjectSource = [
+  "tag clean",
+  "\tdef render",
+  "\t\t<div> 'ok'",
+  "",
+].join("\n");
 const invalidSource = ["tag app", "\tdef render", "\t\treturn if", ""].join("\n");
 const validSource = [
   "import {Profile} from './project/profile.imba'",
@@ -245,21 +270,19 @@ main().catch((error: unknown) => {
 
 async function main(): Promise<void> {
   const client = new LspClient(serverPath);
-  fs.writeFileSync(
-    projectProblemPath,
-    [
-      "tag broken",
-      "\tdef render",
-      "\t\treturn if",
-      "",
-    ].join("\n"),
-  );
+  fs.writeFileSync(projectProblemPath, projectProblemSource);
 
   try {
     const initialize = (await client.request("initialize", {
       processId: process.pid,
       rootUri: pathToFileURL(path.resolve(__dirname, "../..")).toString(),
-      capabilities: {},
+      capabilities: {
+        workspace: {
+          didChangeWatchedFiles: {
+            dynamicRegistration: true,
+          },
+        },
+      },
     })) as {
       capabilities?: {
         completionProvider?: {
@@ -339,6 +362,54 @@ async function main(): Promise<void> {
 
     const projectDiagnostics = await projectDiagnosticsPromise;
     assert.ok(projectDiagnostics);
+
+    const cleanProjectDiagnosticsPromise = client.waitForNotification(
+      "textDocument/publishDiagnostics",
+      (message) => diagnosticsMatch(message, projectProblemUri, 0),
+      8000,
+    );
+    fs.writeFileSync(projectProblemPath, cleanProjectSource);
+    client.notify("workspace/didChangeWatchedFiles", {
+      changes: [
+        {
+          uri: projectProblemUri,
+          type: 2,
+        },
+      ],
+    });
+    assert.ok(await cleanProjectDiagnosticsPromise);
+
+    const changedProjectDiagnosticsPromise = client.waitForNotification(
+      "textDocument/publishDiagnostics",
+      (message) => diagnosticsContainSource(message, projectProblemUri, "imba-parser"),
+      8000,
+    );
+    fs.writeFileSync(projectProblemPath, projectProblemSource);
+    client.notify("workspace/didChangeWatchedFiles", {
+      changes: [
+        {
+          uri: projectProblemUri,
+          type: 2,
+        },
+      ],
+    });
+    assert.ok(await changedProjectDiagnosticsPromise);
+
+    const deletedProjectDiagnosticsPromise = client.waitForNotification(
+      "textDocument/publishDiagnostics",
+      (message) => diagnosticsMatch(message, projectProblemUri, 0),
+      8000,
+    );
+    fs.rmSync(projectProblemPath, { force: true });
+    client.notify("workspace/didChangeWatchedFiles", {
+      changes: [
+        {
+          uri: projectProblemUri,
+          type: 3,
+        },
+      ],
+    });
+    assert.ok(await deletedProjectDiagnosticsPromise);
 
     const symbols = (await client.request("textDocument/documentSymbol", {
       textDocument: { uri },
@@ -892,6 +963,28 @@ function hoverText(result: unknown): string {
   }
 
   return "";
+}
+
+function diagnosticsMatch(
+  message: JsonRpcMessage,
+  uri: string,
+  length: number,
+): boolean {
+  const params = message.params as { uri?: string; diagnostics?: unknown[] } | undefined;
+  return params?.uri === uri &&
+    Array.isArray(params.diagnostics) &&
+    params.diagnostics.length === length;
+}
+
+function diagnosticsContainSource(
+  message: JsonRpcMessage,
+  uri: string,
+  source: string,
+): boolean {
+  const params = message.params as { uri?: string; diagnostics?: unknown[] } | undefined;
+  return params?.uri === uri &&
+    Array.isArray(params.diagnostics) &&
+    params.diagnostics.some((diagnostic) => diagnosticSource(diagnostic) === source);
 }
 
 function diagnosticByMessage(message: JsonRpcMessage, needle: string): Record<string, unknown> {

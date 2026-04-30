@@ -4,8 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  buildProjectDiagnosticFile,
   buildProjectDiagnostics,
   collectProjectImbaFiles,
+  isProjectImbaFile,
 } from "../src/project-diagnostics";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "imba-lsp-project-diagnostics-"));
@@ -52,6 +54,10 @@ async function main(): Promise<void> {
     const openUri = pathToFileURL(openErrorPath).toString();
     const results = await buildProjectDiagnostics(root, new Set([openUri]));
     assert.equal(results.some((result) => result.sourcePath === openErrorPath), false);
+    assert.equal(isProjectImbaFile(root, compilerErrorPath), true);
+    assert.equal(isProjectImbaFile(root, ignoredPath), false);
+    assert.equal(isProjectImbaFile(root, path.join(root, "notes.txt")), false);
+    assert.equal(await buildProjectDiagnosticFile(path.join(root, "missing.imba")), null);
 
     const compilerError = resultFor(results, compilerErrorPath);
     assert.ok(

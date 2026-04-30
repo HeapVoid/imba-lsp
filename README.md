@@ -45,6 +45,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - initial TypeScript diagnostics for the open `.imba` document, mapped back from compiled JS through native source spans
 - TypeScript diagnostics are also mapped for imported virtual `.imba` modules and published for matching open documents
 - project-wide diagnostics scan unopened `.imba` files in the workspace, skip open buffers, and publish compiler/TypeScript diagnostics without duplicate empty publishes
+- project-wide diagnostics register `.imba` file watchers when the client supports them, refresh changed/created files quickly, and clear deleted-file diagnostics
 - TypeScript diagnostics load Imba runtime typings for compiled JS and can be checked by `lsp:probe -- --typescript-diagnostics`
 
 The Tree-sitter grammar is not a complete Imba parser, and it should not be expanded as though it were the main semantic parser. The LSP calls `imba/compiler` directly and keeps the compiler result as document state.

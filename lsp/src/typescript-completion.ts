@@ -10,6 +10,8 @@ import { compileImba } from "./compiler";
 
 const marker = "__imba_lsp_completion__";
 const memberPattern = /(?:\.|\?\.)([$A-Za-z_][\w$?!-]*)?$/;
+const memberExpressionPattern =
+  /([$A-Za-z_][\w$]*(?:(?:\.|\?\.)[$A-Za-z_][\w$]*)*)(?:\.|\?\.)([$A-Za-z_][\w$?!-]*)?$/;
 const wordPattern = /[$A-Za-z_0-9?!-]/;
 
 export function buildTypeScriptCompletionItems(
@@ -34,12 +36,30 @@ export function buildTypeScriptCompletionItems(
   });
 
   const js = result.compilation?.js;
-  if (!js) return [];
+  const compiledItems = js ? buildLanguageServiceCompletionItems(`${syntheticPath}.js`, js) : [];
+  if (compiledItems.length > 0) return compiledItems;
 
+  return buildDirectCompletionItems(source, offset, syntheticPath);
+}
+
+function buildDirectCompletionItems(
+  source: string,
+  offset: number,
+  syntheticPath: string,
+): CompletionItem[] {
+  const before = source.slice(0, offset);
+  const match = before.match(memberExpressionPattern);
+  const expression = match?.[1];
+  if (!expression) return [];
+
+  const js = `const __imba_lsp_probe = ${expression}.${marker};\n`;
+  return buildLanguageServiceCompletionItems(`${syntheticPath}.fallback.js`, js);
+}
+
+function buildLanguageServiceCompletionItems(jsPath: string, js: string): CompletionItem[] {
   const generatedOffset = js.indexOf(marker);
   if (generatedOffset < 0) return [];
 
-  const jsPath = `${syntheticPath}.js`;
   const service = createLanguageService(jsPath, js);
   const completions = service.getCompletionsAtPosition(jsPath, generatedOffset, {
     includeCompletionsForModuleExports: false,

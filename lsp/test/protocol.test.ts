@@ -180,6 +180,8 @@ const validSource = [
   "\t\treturn {name: 'Ada', active: item.active}",
   "\tdef render",
   "\t\tdocument.body.style.overflow = 'hidden'",
+  "\t\tnavigator.userAgent",
+  "\t\twindow.location.href",
   "\t\t<div.card @click=save> \"Hi\"",
   "\tcss .card",
   "\t\tbgc:red5",
@@ -300,6 +302,9 @@ async function main(): Promise<void> {
     assert.ok(generalCompletion.has("return"));
     assert.ok(generalCompletion.has("save"));
     assert.ok(generalCompletion.has("Person"));
+    assert.ok(generalCompletion.has("navigator"));
+    assert.ok(generalCompletion.has("window"));
+    assert.ok(generalCompletion.has("fetch"));
 
     const memberCompletion = completionLabels(
       await client.request("textDocument/completion", {
@@ -317,6 +322,26 @@ async function main(): Promise<void> {
       }),
     );
     assert.ok(domCompletion.has("backgroundColor"));
+
+    const navigatorCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "navigator."),
+      }),
+    );
+    assert.ok(navigatorCompletion.has("userAgent"));
+    assert.ok(navigatorCompletion.has("language"));
+    assert.ok(navigatorCompletion.has("clipboard"));
+
+    const windowCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "window."),
+      }),
+    );
+    assert.ok(windowCompletion.has("navigator"));
+    assert.ok(windowCompletion.has("location"));
+    assert.ok(windowCompletion.has("localStorage"));
 
     const classMemberCompletion = completionLabels(
       await client.request("textDocument/completion", {

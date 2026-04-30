@@ -45,6 +45,7 @@ Goal: a small Node/TypeScript LSP that calls native `imba/compiler` and makes Ze
 - [x] Verify diagnostics and LSP startup inside a live Zed dev extension.
 - [ ] Verify semantic token styling inside a live Zed dev extension with Zed semantic tokens enabled.
 - [x] Add a corpus probe for compiler diagnostics, document symbols, and semantic-token adapter failures.
+- [x] Add detailed `--show-diagnostics` probe output for compiler and TypeScript diagnostics.
 - [ ] Add a release/install path for `imba-lsp` instead of relying on the dev-extension local `lsp/dist` path.
 
 ## Phase 4: TypeScript-Aware Features

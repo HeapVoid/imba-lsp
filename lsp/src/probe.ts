@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
-import { DiagnosticSeverity } from "vscode-languageserver/node";
+import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { compileImba, type CompileResult } from "./compiler";
 import { buildSemanticTokenData } from "./semantic-tokens";
@@ -12,13 +12,27 @@ import { buildTypeScriptDiagnostics } from "./typescript-diagnostics";
 interface ProbeOptions {
   failOnDiagnostics: boolean;
   json: boolean;
+  showDiagnostics: boolean;
   targets: string[];
   typescriptDiagnostics: boolean;
+}
+
+interface ProbeDiagnosticDetail {
+  character: number;
+  code: string | number | null;
+  endCharacter: number;
+  endLine: number;
+  line: number;
+  lineText: string;
+  message: string;
+  severity: string;
+  source: string;
 }
 
 interface ProbeResult {
   path: string;
   compilerDiagnostics: number;
+  diagnosticDetails?: ProbeDiagnosticDetail[];
   diagnostics: number;
   errors: number;
   typeScriptDiagnostics: number;
@@ -61,7 +75,7 @@ async function main(): Promise<void> {
   if (options.json) {
     console.log(JSON.stringify(summary(results), null, 2));
   } else {
-    printSummary(results);
+    printSummary(results, options);
   }
 
   const failures = results.filter((result) => result.failure);
@@ -76,6 +90,7 @@ function parseArgs(args: string[]): ProbeOptions {
   const targets: string[] = [];
   let failOnDiagnostics = false;
   let json = false;
+  let showDiagnostics = false;
   let typescriptDiagnostics = false;
 
   for (const arg of args) {
@@ -83,6 +98,8 @@ function parseArgs(args: string[]): ProbeOptions {
       failOnDiagnostics = true;
     } else if (arg === "--json") {
       json = true;
+    } else if (arg === "--show-diagnostics" || arg === "--show-diags") {
+      showDiagnostics = true;
     } else if (arg === "--typescript-diagnostics" || arg === "--ts-diagnostics") {
       typescriptDiagnostics = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -96,6 +113,7 @@ function parseArgs(args: string[]): ProbeOptions {
   return {
     failOnDiagnostics,
     json,
+    showDiagnostics,
     targets: targets.length > 0 ? targets : [process.cwd()],
     typescriptDiagnostics,
   };
@@ -103,7 +121,7 @@ function parseArgs(args: string[]): ProbeOptions {
 
 function printHelp(): void {
   console.log([
-    "Usage: imba-lsp-probe [--json] [--typescript-diagnostics] [--fail-on-diagnostics] <file-or-directory>...",
+    "Usage: imba-lsp-probe [--json] [--typescript-diagnostics] [--show-diagnostics] [--fail-on-diagnostics] <file-or-directory>...",
     "",
     "Compiles .imba files with the native Imba compiler and exercises the LSP",
     "diagnostics, semantic-token, and document-symbol adapters.",
@@ -167,6 +185,9 @@ async function probeFile(file: string, options: ProbeOptions): Promise<ProbeResu
     return {
       path: file,
       compilerDiagnostics: result.diagnostics.length,
+      diagnosticDetails: options.showDiagnostics
+        ? diagnosticDetails(document, diagnostics)
+        : undefined,
       diagnostics: diagnostics.length,
       errors: diagnostics.filter((diagnostic) => diagnostic.severity === DiagnosticSeverity.Error).length,
       typeScriptDiagnostics: typeScriptDiagnostics.length,
@@ -221,7 +242,7 @@ function summary(results: ProbeResult[]): Record<string, unknown> {
   };
 }
 
-function printSummary(results: ProbeResult[]): void {
+function printSummary(results: ProbeResult[], options: ProbeOptions): void {
   let totalDiagnostics = 0;
   let totalErrors = 0;
   let totalFailures = 0;
@@ -252,6 +273,10 @@ function printSummary(results: ProbeResult[]): void {
         `${result.elapsedMs.toFixed(1)}ms`,
       ].join(" "),
     );
+
+    if (options.showDiagnostics) {
+      printDiagnosticDetails(result);
+    }
   }
 
   console.log(
@@ -268,6 +293,66 @@ function printSummary(results: ProbeResult[]): void {
 
 function displayPath(file: string): string {
   return path.relative(process.cwd(), file) || path.basename(file);
+}
+
+function diagnosticDetails(
+  document: TextDocument,
+  diagnostics: Diagnostic[],
+): ProbeDiagnosticDetail[] {
+  const source = document.getText();
+
+  return diagnostics.map((diagnostic) => ({
+    character: diagnostic.range.start.character + 1,
+    code: diagnostic.code ?? null,
+    endCharacter: diagnostic.range.end.character + 1,
+    endLine: diagnostic.range.end.line + 1,
+    line: diagnostic.range.start.line + 1,
+    lineText: lineTextAt(source, diagnostic.range.start.line),
+    message: diagnostic.message,
+    severity: severityName(diagnostic.severity),
+    source: diagnostic.source ?? "unknown",
+  }));
+}
+
+function printDiagnosticDetails(result: ProbeResult): void {
+  for (const diagnostic of result.diagnosticDetails ?? []) {
+    const code = diagnostic.code === null ? "" : ` ${diagnostic.code}`;
+    console.log(
+      `  ${diagnostic.severity} ${diagnostic.source}${code} ` +
+      `${diagnostic.line}:${diagnostic.character} ${diagnostic.message}`,
+    );
+    console.log(`    ${renderLine(diagnostic.lineText)}`);
+    console.log(`    ${markerLine(diagnostic.lineText, diagnostic.character, diagnostic.endCharacter)}`);
+  }
+}
+
+function severityName(severity: DiagnosticSeverity | undefined): string {
+  switch (severity) {
+    case DiagnosticSeverity.Warning:
+      return "warning";
+    case DiagnosticSeverity.Information:
+      return "info";
+    case DiagnosticSeverity.Hint:
+      return "hint";
+    default:
+      return "error";
+  }
+}
+
+function lineTextAt(source: string, line: number): string {
+  return source.split(/\r?\n/)[line] ?? "";
+}
+
+function renderLine(line: string): string {
+  return line.replace(/\t/g, "  ");
+}
+
+function markerLine(line: string, character: number, endCharacter: number): string {
+  const start = Math.max(0, character - 1);
+  const end = Math.max(start + 1, endCharacter - 1);
+  const prefix = renderLine(line.slice(0, start));
+  const width = Math.max(1, renderLine(line.slice(start, end)).length);
+  return `${" ".repeat(prefix.length)}${"^".repeat(width)}`;
 }
 
 function hasCompilerErrors(result: CompileResult): boolean {

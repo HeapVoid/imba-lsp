@@ -97,9 +97,10 @@ Probe the LSP adapters against real `.imba` files:
 
 ```sh
 npm run lsp:probe -- /path/to/imba/project
+npm run lsp:probe -- --typescript-diagnostics --show-diagnostics /path/to/imba/project
 ```
 
-The probe compiles every `.imba` file under the target path, builds semantic tokens, builds document symbols, reports diagnostics, and fails only on runtime failures. Add `--fail-on-diagnostics` when the target is expected to be clean. Add `--typescript-diagnostics` to include mapped TypeScript diagnostics in the diagnostic counts.
+The probe compiles every `.imba` file under the target path, builds semantic tokens, builds document symbols, reports diagnostics, and fails only on runtime failures. Add `--fail-on-diagnostics` when the target is expected to be clean. Add `--typescript-diagnostics` to include mapped TypeScript diagnostics in the diagnostic counts. Add `--show-diagnostics` to print source, code, line/column, message, source line, and caret markers for each diagnostic.
 
 Run the language server over stdio:
 

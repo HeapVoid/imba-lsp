@@ -29,6 +29,7 @@ interface NavigationSymbol {
   indent: number;
   containerName: string | null;
   declaration: string;
+  documentation?: string;
   typeName?: string;
 }
 
@@ -208,6 +209,7 @@ function buildNavigationIndex(document: TextDocument): NavigationIndex {
         containerName:
           keyword === "class" || keyword === "tag" ? null : container?.name ?? null,
         declaration: text.trim(),
+        documentation: documentationBeforeLine(lines, line),
       });
 
       stack.push({ indent, symbol });
@@ -227,6 +229,7 @@ function buildNavigationIndex(document: TextDocument): NavigationIndex {
         indent,
         containerName: container.name,
         declaration: text.trim(),
+        documentation: documentationBeforeLine(lines, line),
       });
     }
 
@@ -243,6 +246,7 @@ function buildNavigationIndex(document: TextDocument): NavigationIndex {
         indent,
         containerName: container?.name ?? null,
         declaration: text.trim(),
+        documentation: documentationBeforeLine(lines, line),
         typeName,
       });
     }
@@ -372,9 +376,24 @@ function hoverMarkdown(symbol: NavigationSymbol): string {
 
   return [
     `Imba ${symbol.kind} \`${name}${typeSuffix}\``,
-    "",
+    symbol.documentation,
     "```imba",
     symbol.declaration,
     "```",
-  ].join("\n");
+  ].filter(Boolean).join("\n\n");
+}
+
+function documentationBeforeLine(lines: string[], line: number): string | undefined {
+  const comments: string[] = [];
+
+  for (let index = line - 1; index >= 0; index--) {
+    const text = lines[index] ?? "";
+    const match = text.match(/^\t*#\s?(.*)$/);
+    if (!match) break;
+
+    comments.unshift(match[1] ?? "");
+  }
+
+  const documentation = comments.join("\n").trim();
+  return documentation || undefined;
 }

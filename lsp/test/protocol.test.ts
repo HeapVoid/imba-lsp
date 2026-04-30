@@ -196,6 +196,7 @@ const validSource = [
   "\tfoo-bar = 1",
   "\tget ready?",
   "\t\treturn true",
+  "\t# Says hello",
   "\tdef greet",
   "\t\treturn \"hi\"",
   "",
@@ -369,6 +370,7 @@ async function main(): Promise<void> {
       }),
     );
     assert.match(greetHover, /Imba method `Person\.greet`/);
+    assert.match(greetHover, /Says hello/);
 
     const importedGreetHover = hoverText(
       await client.request("textDocument/hover", {
@@ -396,6 +398,7 @@ async function main(): Promise<void> {
       }),
     );
     assert.match(importedReadyHover, /Profile\.ready\?/);
+    assert.match(importedReadyHover, /True once the profile is ready/);
     assert.match(importedReadyHover, /get ready\?/);
     assert.doesNotMatch(importedReadyHover, /readyΦ/);
 

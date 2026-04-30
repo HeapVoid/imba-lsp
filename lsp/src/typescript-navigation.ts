@@ -196,10 +196,16 @@ function virtualImbaHover(
     if (!declaration) continue;
 
     const title = virtualImbaHoverTitle(definition, declaration);
+    const sourceDocumentation = documentationBeforeOffset(virtualFile.source, sourceRange.startOffset);
     const display = ts.displayPartsToString(quickInfo.displayParts ?? []);
     const documentation = ts.displayPartsToString(quickInfo.documentation ?? []);
 
-    return virtualImbaHoverMarkdown(title, declaration, display, documentation);
+    return virtualImbaHoverMarkdown(
+      title,
+      declaration,
+      display,
+      [sourceDocumentation, documentation].filter(Boolean).join("\n\n"),
+    );
   }
 
   return null;
@@ -412,6 +418,21 @@ function declarationLineAtOffset(source: string, offset: number): string | null 
   const declaration = source.slice(lineStart, lineEnd).trim();
 
   return declaration || null;
+}
+
+function documentationBeforeOffset(source: string, offset: number): string {
+  const linesBefore = source.slice(0, offset).split("\n");
+  const comments: string[] = [];
+
+  for (let index = linesBefore.length - 2; index >= 0; index--) {
+    const text = linesBefore[index] ?? "";
+    const match = text.match(/^\t*#\s?(.*)$/);
+    if (!match) break;
+
+    comments.unshift(match[1] ?? "");
+  }
+
+  return comments.join("\n").trim();
 }
 
 function virtualImbaHoverTitle(

@@ -5,7 +5,7 @@ line_comments = ["# "]
 tab_size = 4
 hard_tabs = true
 word_characters = ["-", "?", "!", "$"]
-increase_indent_pattern = "^\\s*(?:(?:export\\s+(?:default\\s+)?)?(?:def|get|set|class|tag)\\b.*|(?:if|elif|else\\s+if|unless|for|while|until|switch|case|catch)\\b(?!.*\\bthen\\b).*|(?:else|try|finally|do)\\s*(?:#.*)?|.*(?:^|\\s)do\\s*(?:#.*)?|(?:global\\s+)?css(?:\\s+.*)?)\\s*(?:#.*)?$"
+increase_indent_pattern = "^\\s*(?:(?:export\\s+(?:default\\s+)?)?(?:def|get|set|class|tag)\\b.*|(?:if|elif|else\\s+if|unless|for|while|until|switch|case|catch)\\b.*|(?:else|try|finally|do)\\s*(?:#.*)?|.*(?:^|\\s)do\\s*(?:#.*)?|(?:global\\s+)?css(?:\\s+.*)?)\\s*(?:#.*)?$"
 
 brackets = [
   { start = "(", end = ")", close = true, newline = false },

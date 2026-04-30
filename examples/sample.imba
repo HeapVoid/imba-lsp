@@ -2,7 +2,7 @@
 
 import { db } from './db.imba'
 
-export tag app-root
+tag app-root
 	title = "Imba in Zed"
 
 	css self
@@ -10,9 +10,6 @@ export tag app-root
 		g:12px
 		.title
 			c:blue6
-
-	def bad
-		return if
 
 	def save
 		console.log("save")

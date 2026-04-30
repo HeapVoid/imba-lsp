@@ -1,5 +1,7 @@
 import {
   CompletionItemKind,
+  Range,
+  TextEdit,
   type CompletionItem,
   type Position,
 } from "vscode-languageserver/node";
@@ -8,6 +10,8 @@ import type { ImbaCompilation } from "./compiler";
 import { buildTypeScriptCompletionItems } from "./typescript-completion";
 
 export const completionTriggerCharacters = [".", "@", "<", ":", "[", " "] as const;
+
+const wordCharacterPattern = /[$A-Za-z_0-9?!-]/;
 
 const keywords = [
   "and",
@@ -310,10 +314,16 @@ export function buildCompletionItems(
   }
 
   if (isMemberContext(prefix)) {
+    const replacementRange = wordRangeAtPosition(document, position);
     return uniqueItems([
-      ...buildTypeScriptCompletionItems(document, position, sourcePath),
-      ...symbols.members,
-      ...commonMembers.map((member) => item(member, CompletionItemKind.Property, "Common member", "40")),
+      ...buildTypeScriptCompletionItems(document, position, sourcePath, compilation),
+      ...withReplacementRange(symbols.members, replacementRange),
+      ...withReplacementRange(
+        commonMembers.map((member) =>
+          item(member, CompletionItemKind.Property, "Common member", "40"),
+        ),
+        replacementRange,
+      ),
     ]);
   }
 
@@ -502,6 +512,36 @@ function indentOf(line: string): number {
 
 function getLine(source: string, line: number): string {
   return source.split("\n")[line] ?? "";
+}
+
+function wordRangeAtPosition(document: TextDocument, position: Position): Range {
+  const source = document.getText();
+  const offset = document.offsetAt(position);
+  let start = offset;
+  let end = offset;
+
+  while (start > 0 && wordCharacterPattern.test(source[start - 1] ?? "")) {
+    start--;
+  }
+
+  while (end < source.length && wordCharacterPattern.test(source[end] ?? "")) {
+    end++;
+  }
+
+  return Range.create(document.positionAt(start), document.positionAt(end));
+}
+
+function withReplacementRange(items: CompletionItem[], range: Range): CompletionItem[] {
+  return items.map((entry) => {
+    if (entry.textEdit) return entry;
+
+    const newText = entry.insertText ?? entry.label;
+    return {
+      ...entry,
+      insertText: undefined,
+      textEdit: TextEdit.replace(range, newText),
+    };
+  });
 }
 
 function item(

@@ -1,12 +1,15 @@
 import path from "node:path";
 import {
   CompletionItemKind,
+  Range,
+  TextEdit,
   type CompletionItem,
   type Position,
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import * as ts from "typescript";
-import { compileImba } from "./compiler";
+import { compileImba, type ImbaCompilation } from "./compiler";
+import { generatedOffsetToSourceOffset, sourceOffsetToGeneratedOffset } from "./source-map";
 import { createTypeScriptLanguageService } from "./typescript-service";
 
 const marker = "__imba_lsp_completion__";
@@ -19,12 +22,17 @@ export function buildTypeScriptCompletionItems(
   document: TextDocument,
   position: Position,
   sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
 ): CompletionItem[] {
   const source = document.getText();
   const offset = document.offsetAt(position);
   const context = memberContext(source, offset);
   if (!context) return [];
 
+  const replacementRange = Range.create(
+    document.positionAt(context.start),
+    document.positionAt(context.end),
+  );
   const syntheticSource = [
     source.slice(0, context.start),
     marker,
@@ -32,21 +40,37 @@ export function buildTypeScriptCompletionItems(
   ].join("");
 
   const syntheticPath = sourcePath ?? path.join(process.cwd(), "untitled.imba");
+  const mappedItems = buildMappedCompletionItems(
+    document,
+    source,
+    position,
+    syntheticPath,
+    replacementRange,
+    compilation,
+  );
+  if (mappedItems.length > 0) return mappedItems;
+
   const result = compileImba(syntheticSource, syntheticPath, {
     sourcemap: true,
   });
 
   const js = result.compilation?.js;
-  const compiledItems = js ? buildLanguageServiceCompletionItems(`${syntheticPath}.js`, js) : [];
+  const compiledItems = js
+    ? buildLanguageServiceCompletionItems(`${syntheticPath}.js`, js, {
+      defaultRange: replacementRange,
+      generatedOffset: js.indexOf(marker),
+    })
+    : [];
   if (compiledItems.length > 0) return compiledItems;
 
-  return buildDirectCompletionItems(source, offset, syntheticPath);
+  return buildDirectCompletionItems(source, offset, syntheticPath, replacementRange);
 }
 
 function buildDirectCompletionItems(
   source: string,
   offset: number,
   syntheticPath: string,
+  replacementRange: Range,
 ): CompletionItem[] {
   const before = source.slice(0, offset);
   const match = before.match(memberExpressionPattern);
@@ -54,15 +78,57 @@ function buildDirectCompletionItems(
   if (!expression) return [];
 
   const js = `const __imba_lsp_probe = ${expression}.${marker};\n`;
-  return buildLanguageServiceCompletionItems(`${syntheticPath}.fallback.js`, js);
+  return buildLanguageServiceCompletionItems(`${syntheticPath}.fallback.js`, js, {
+    defaultRange: replacementRange,
+    generatedOffset: js.indexOf(marker),
+  });
 }
 
-function buildLanguageServiceCompletionItems(jsPath: string, js: string): CompletionItem[] {
-  const generatedOffset = js.indexOf(marker);
-  if (generatedOffset < 0) return [];
+interface LanguageServiceCompletionOptions {
+  defaultRange: Range;
+  document?: TextDocument;
+  generatedOffset: number;
+  mappedCompilation?: ImbaCompilation;
+  source?: string;
+}
+
+function buildMappedCompletionItems(
+  document: TextDocument,
+  source: string,
+  position: Position,
+  syntheticPath: string,
+  replacementRange: Range,
+  compilation: ImbaCompilation | undefined,
+): CompletionItem[] {
+  const currentCompilation = compilation ?? compileImba(source, syntheticPath, {
+    sourcemap: true,
+  }).compilation;
+  const generated = currentCompilation?.js;
+  if (!generated) return [];
+
+  const offset = document.offsetAt(position);
+  const sourceOffset = offset > 0 ? offset - 1 : offset;
+  const mapping = sourceOffsetToGeneratedOffset(currentCompilation, source, sourceOffset);
+  if (!mapping) return [];
+
+  return buildLanguageServiceCompletionItems(`${syntheticPath}.compiled.js`, generated, {
+    defaultRange: replacementRange,
+    document,
+    generatedOffset: mapping.offset + 1,
+    mappedCompilation: currentCompilation,
+    source,
+  });
+}
+
+function buildLanguageServiceCompletionItems(
+  jsPath: string,
+  js: string,
+  options: LanguageServiceCompletionOptions,
+): CompletionItem[] {
+  if (options.generatedOffset < 0) return [];
 
   const service = createTypeScriptLanguageService(jsPath, js);
-  const completions = service.getCompletionsAtPosition(jsPath, generatedOffset, {
+  const completions = service.getCompletionsAtPosition(jsPath, options.generatedOffset, {
     includeCompletionsForModuleExports: false,
     includeCompletionsWithInsertText: false,
   });
@@ -75,8 +141,41 @@ function buildLanguageServiceCompletionItems(jsPath: string, js: string): Comple
       label: entry.name,
       kind: completionKind(entry.kind),
       detail: "TypeScript",
+      textEdit: TextEdit.replace(
+        replacementRangeForEntry(entry, options),
+        entry.insertText ?? entry.name,
+      ),
       sortText: `05_ts_${entry.name}`,
     }));
+}
+
+function replacementRangeForEntry(
+  entry: ts.CompletionEntry,
+  options: LanguageServiceCompletionOptions,
+): Range {
+  const replacementSpan = entry.replacementSpan;
+  if (!replacementSpan || !options.document || !options.mappedCompilation || !options.source) {
+    return options.defaultRange;
+  }
+
+  const start = generatedOffsetToSourceOffset(
+    options.mappedCompilation,
+    options.source,
+    replacementSpan.start,
+  );
+  const end = generatedOffsetToSourceOffset(
+    options.mappedCompilation,
+    options.source,
+    replacementSpan.start + Math.max(replacementSpan.length - 1, 0),
+  );
+  if (!start || !end) return options.defaultRange;
+
+  const startOffset = start.offset;
+  const endOffset = Math.max(startOffset, end.offset + 1);
+  return Range.create(
+    options.document.positionAt(startOffset),
+    options.document.positionAt(endOffset),
+  );
 }
 
 function memberContext(source: string, offset: number): { start: number; end: number } | null {

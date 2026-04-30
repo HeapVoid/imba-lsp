@@ -169,11 +169,13 @@ class LspClient {
 }
 
 const serverPath = path.resolve(__dirname, "../src/server.js");
-const fixturePath = path.resolve(__dirname, "../fixtures/protocol.imba");
+const fixturePath = path.resolve(__dirname, "../../test/fixtures/protocol.imba");
 const uri = pathToFileURL(fixturePath).toString();
 
 const invalidSource = ["tag app", "\tdef render", "\t\treturn if", ""].join("\n");
 const validSource = [
+  "import {Profile} from './project/profile.imba'",
+  "",
   "tag app",
   "\tcount = 0",
   "\tdef save item",
@@ -195,6 +197,9 @@ const validSource = [
   "",
   "let person = new Person",
   "person.greet",
+  "let profile = new Profile",
+  "profile.na",
+  "profile.greet",
   "",
 ].join("\n");
 
@@ -316,6 +321,14 @@ async function main(): Promise<void> {
     );
     assert.match(greetHover, /Imba method `Person\.greet`/);
 
+    const importedGreetHover = hoverText(
+      await client.request("textDocument/hover", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "profile.greet"),
+      }),
+    );
+    assert.match(importedGreetHover, /Profile\.greet/);
+
     const navigatorHover = hoverText(
       await client.request("textDocument/hover", {
         textDocument: { uri },
@@ -370,6 +383,16 @@ async function main(): Promise<void> {
     assert.ok(memberCompletion.has("body"));
     assert.ok(memberCompletion.has("style"));
 
+    const bodyCompletion = completionItem(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "document.bo"),
+      }),
+      "body",
+    );
+    assert.equal(completionTextEditNewText(bodyCompletion), "body");
+    assert.equal(completionTextEditRangeText(validSource, bodyCompletion), "body");
+
     const domCompletion = completionLabels(
       await client.request("textDocument/completion", {
         textDocument: { uri },
@@ -406,6 +429,15 @@ async function main(): Promise<void> {
     );
     assert.ok(classMemberCompletion.has("greet"));
     assert.ok(classMemberCompletion.has("nickname"));
+
+    const importedClassMemberCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "profile.na"),
+      }),
+    );
+    assert.ok(importedClassMemberCompletion.has("name"));
+    assert.ok(importedClassMemberCompletion.has("greet"));
 
     const eventCompletion = completionLabels(
       await client.request("textDocument/completion", {
@@ -482,6 +514,29 @@ function completionLabels(result: unknown): Set<string> {
       .map((item) => (item as { label?: unknown }).label)
       .filter((label): label is string => typeof label === "string"),
   );
+}
+
+function completionItem(result: unknown, label: string): Record<string, unknown> {
+  const items = Array.isArray(result)
+    ? result
+    : ((result as { items?: unknown[] } | undefined)?.items ?? []);
+  const match = items.find((item) => (item as { label?: unknown }).label === label);
+  assert.ok(match, `missing completion item ${label}`);
+  return match as Record<string, unknown>;
+}
+
+function completionTextEditNewText(item: Record<string, unknown>): string {
+  const textEdit = item.textEdit as { newText?: unknown } | undefined;
+  assert.ok(textEdit, `missing textEdit on completion ${String(item.label)}`);
+  const newText = textEdit.newText;
+  assert.ok(typeof newText === "string");
+  return newText;
+}
+
+function completionTextEditRangeText(source: string, item: Record<string, unknown>): string {
+  const textEdit = item.textEdit as { range?: LspRange } | undefined;
+  assert.ok(textEdit?.range, `missing textEdit range on completion ${String(item.label)}`);
+  return rangeText(source, textEdit.range);
 }
 
 function locationTexts(source: string, result: unknown): Set<string> {

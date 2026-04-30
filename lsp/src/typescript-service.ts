@@ -1,42 +1,175 @@
+import path from "node:path";
 import * as ts from "typescript";
+import { compileImba } from "./compiler";
 
 export function createTypeScriptLanguageService(
   fileName: string,
   source: string,
 ): ts.LanguageService {
+  const project = projectConfigFor(fileName);
   const compilerOptions: ts.CompilerOptions = {
+    ...defaultCompilerOptions,
+    ...project.compilerOptions,
     allowJs: true,
-    checkJs: false,
-    lib: ["lib.es2022.d.ts", "lib.dom.d.ts"],
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeJs,
-    target: ts.ScriptTarget.ES2022,
+  };
+  const virtualFiles = new Map<string, string>([[fileName, source]]);
+  const scriptFileNames = [
+    fileName,
+    ...project.fileNames.filter(
+      (projectFile) => path.resolve(projectFile) !== path.resolve(fileName),
+    ),
+  ];
+
+  const fileExists = (requestedFile: string): boolean =>
+    virtualFiles.has(requestedFile) || ts.sys.fileExists(requestedFile);
+
+  const readFile = (requestedFile: string): string | undefined =>
+    virtualFiles.get(requestedFile) ?? ts.sys.readFile(requestedFile);
+
+  const moduleResolutionHost: ts.ModuleResolutionHost = {
+    directoryExists: ts.sys.directoryExists,
+    fileExists,
+    getCurrentDirectory: () => project.currentDirectory,
+    getDirectories: ts.sys.getDirectories,
+    readFile,
+    realpath: ts.sys.realpath,
+    useCaseSensitiveFileNames: () => ts.sys.useCaseSensitiveFileNames,
   };
 
   const host: ts.LanguageServiceHost = {
     getCompilationSettings: () => compilerOptions,
-    getCurrentDirectory: () => process.cwd(),
+    getCurrentDirectory: () => project.currentDirectory,
     getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
-    getScriptFileNames: () => [fileName],
+    getScriptFileNames: () => scriptFileNames,
     getScriptVersion: () => "0",
     getScriptSnapshot: (requestedFile) => {
-      const text = requestedFile === fileName ? source : readSystemFile(requestedFile);
+      const text = readFile(requestedFile);
       return text === undefined ? undefined : ts.ScriptSnapshot.fromString(text);
     },
-    fileExists: (requestedFile) => requestedFile === fileName || ts.sys.fileExists(requestedFile),
-    readFile: (requestedFile) => {
-      if (requestedFile === fileName) return source;
-      return ts.sys.readFile(requestedFile);
-    },
+    fileExists,
+    readFile,
     readDirectory: ts.sys.readDirectory,
     directoryExists: ts.sys.directoryExists,
     getDirectories: ts.sys.getDirectories,
+    resolveModuleNames: (moduleNames, containingFile) =>
+      moduleNames.map((moduleName) =>
+        resolveModuleName(
+          moduleName,
+          containingFile,
+          compilerOptions,
+          moduleResolutionHost,
+          virtualFiles,
+        ),
+      ),
   };
 
   return ts.createLanguageService(host);
 }
 
-function readSystemFile(fileName: string): string | undefined {
-  if (!ts.sys.fileExists(fileName)) return undefined;
-  return ts.sys.readFile(fileName);
+interface ProjectConfig {
+  compilerOptions: ts.CompilerOptions;
+  currentDirectory: string;
+  fileNames: string[];
+}
+
+const defaultCompilerOptions: ts.CompilerOptions = {
+  allowJs: true,
+  checkJs: false,
+  lib: ["lib.es2022.d.ts", "lib.dom.d.ts"],
+  module: ts.ModuleKind.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.NodeJs,
+  skipLibCheck: true,
+  target: ts.ScriptTarget.ES2022,
+};
+
+const projectConfigCache = new Map<string, ProjectConfig>();
+
+function projectConfigFor(fileName: string): ProjectConfig {
+  const startDirectory = path.dirname(path.resolve(fileName));
+  const configPath = ts.findConfigFile(startDirectory, ts.sys.fileExists, "tsconfig.json");
+  if (!configPath) {
+    return {
+      compilerOptions: {},
+      currentDirectory: startDirectory,
+      fileNames: [],
+    };
+  }
+
+  const cached = projectConfigCache.get(configPath);
+  if (cached) return cached;
+
+  const config = ts.readConfigFile(configPath, ts.sys.readFile);
+  if (config.error) {
+    return {
+      compilerOptions: {},
+      currentDirectory: path.dirname(configPath),
+      fileNames: [],
+    };
+  }
+
+  const currentDirectory = path.dirname(configPath);
+  const parsed = ts.parseJsonConfigFileContent(
+    config.config,
+    ts.sys,
+    currentDirectory,
+    defaultCompilerOptions,
+    configPath,
+  );
+  const project = {
+    compilerOptions: parsed.options,
+    currentDirectory,
+    fileNames: parsed.fileNames,
+  };
+
+  projectConfigCache.set(configPath, project);
+  return project;
+}
+
+function resolveImbaModule(
+  moduleName: string,
+  containingFile: string,
+  virtualFiles: Map<string, string>,
+): ts.ResolvedModuleFull | undefined {
+  if (!moduleName.endsWith(".imba")) return undefined;
+
+  const sourcePath = path.resolve(path.dirname(containingFile), moduleName);
+  if (!ts.sys.fileExists(sourcePath)) return undefined;
+
+  const virtualPath = `${sourcePath}.js`;
+  if (!virtualFiles.has(virtualPath)) {
+    const source = ts.sys.readFile(sourcePath);
+    if (source === undefined) return undefined;
+
+    const result = compileImba(source, sourcePath, {
+      sourcemap: true,
+    });
+    const js = result.compilation?.js;
+    if (!js) return undefined;
+
+    virtualFiles.set(virtualPath, js);
+  }
+
+  return {
+    extension: ts.Extension.Js,
+    isExternalLibraryImport: false,
+    resolvedFileName: virtualPath,
+  };
+}
+
+function resolveModuleName(
+  moduleName: string,
+  containingFile: string,
+  compilerOptions: ts.CompilerOptions,
+  moduleResolutionHost: ts.ModuleResolutionHost,
+  virtualFiles: Map<string, string>,
+): ts.ResolvedModuleFull | undefined {
+  const imbaModule = resolveImbaModule(moduleName, containingFile, virtualFiles);
+  if (imbaModule) return imbaModule;
+
+  return ts.resolveModuleName(
+    moduleName,
+    containingFile,
+    compilerOptions,
+    moduleResolutionHost,
+  ).resolvedModule;
 }

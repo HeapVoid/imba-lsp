@@ -56,8 +56,10 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 - [x] Add TypeScript-backed hover and go-to-definition fallback for JS-compatible browser/global expressions.
 - [x] Add span-based source mapping from native `locs.spans` for Imba source offsets and generated JS offsets.
 - [x] Use compiler source spans as the first TypeScript hover/go-to-definition path, with fallback for weak `any` results.
-- [ ] Expand completion with Imba-aware post-processing and source-map/span-backed replacement ranges.
-- [ ] Expand hover and go-to-definition with cross-file/project TypeScript targets.
+- [x] Add explicit LSP replacement edits for TypeScript and fallback member completions.
+- [x] Resolve project `tsconfig.json` and imported `.imba` files as virtual compiled JS modules in the TypeScript bridge.
+- [ ] Expand completion with richer Imba-aware post-processing for generated JS names.
+- [ ] Map cross-file TypeScript definitions from virtual compiled JS back to Imba source ranges.
 - [ ] Port useful diagnostics/codefix behavior from `typescript-imba-plugin` as reference, with license checks before copying anything.
 
 ## Known Risks

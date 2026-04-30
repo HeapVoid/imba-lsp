@@ -102,8 +102,7 @@ function resolveSymbols(
   const memberBase = memberBaseBefore(source, token.startOffset);
 
   if (memberBase) {
-    const memberSymbols = resolveMember(index, source, position, memberBase, token.name);
-    if (memberSymbols.length > 0) return memberSymbols;
+    return resolveMember(index, source, position, memberBase, token.name);
   }
 
   const currentContainer = enclosingContainer(index, source, position);

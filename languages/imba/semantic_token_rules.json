@@ -8,6 +8,10 @@
     "style": ["attribute", "property"]
   },
   {
+    "token_type": "tagAttribute",
+    "style": ["imba.tag.attribute", "attribute", "property"]
+  },
+  {
     "token_type": "objectKey",
     "style": ["property", "attribute"]
   },
@@ -38,6 +42,14 @@
   {
     "token_type": "tagId",
     "style": ["attribute", "property"]
+  },
+  {
+    "token_type": "classField",
+    "style": ["imba.class.field", "property", "variable"]
+  },
+  {
+    "token_type": "tagField",
+    "style": ["imba.tag.field", "property", "variable"]
   },
   {
     "token_type": "cssSelector",

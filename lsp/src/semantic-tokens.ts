@@ -39,6 +39,9 @@ export const semanticTokenTypes = [
   "tagClass",
   "tagId",
   "cssSelector",
+  "classField",
+  "tagField",
+  "tagAttribute",
 ] as const;
 
 export const semanticTokenModifiers = [
@@ -364,7 +367,7 @@ function buildSourceSemanticItems(source: string): SemanticItem[] {
 
     const declaration = text.match(declarationLinePattern);
     if (declaration) {
-      addDeclarationLineItems(items, declaration, line, text);
+      addDeclarationLineItems(items, declaration, line, text, nearestContainerKind(stack));
 
       const keyword = declaration[4] ?? "";
       if (keyword === "class" || keyword === "tag") {
@@ -384,8 +387,8 @@ function buildSourceSemanticItems(source: string): SemanticItem[] {
     const assignment = text.match(assignmentLinePattern);
     if (assignment && !binding) {
       const name = assignment[2] ?? "";
-      const inContainer = stack.some((entry) => entry.kind === "class" || entry.kind === "tag");
-      addLineToken(items, line, text.indexOf(name), name.length, inContainer ? "property" : "variable", {
+      const containerKind = nearestContainerKind(stack);
+      addLineToken(items, line, text.indexOf(name), name.length, fieldSemanticType(containerKind, "variable"), {
         modifiers: modifierNamesToMask(["declaration"]),
         priority: 4,
       });
@@ -411,11 +414,12 @@ function addDeclarationLineItems(
   match: RegExpMatchArray,
   line: number,
   text: string,
+  containerKind: string | null,
 ): void {
   const keyword = match[4] ?? "";
   const name = match[5] ?? "";
   const nameStart = match[0].lastIndexOf(name);
-  const semanticType = declarationSemanticType(keyword);
+  const semanticType = declarationSemanticType(keyword, containerKind);
   const modifiers = modifierNamesToMask(["declaration", "definition"]);
 
   addLineToken(items, line, nameStart, name.length, semanticType, {
@@ -540,7 +544,7 @@ function scanTagAttributeTokens(
     if (name.startsWith("@")) continue;
     if (name === "self" || name === "this") continue;
 
-    addLineToken(items, line, nameStart, name.length, "attribute", {
+    addLineToken(items, line, nameStart, name.length, "tagAttribute", {
       priority: 5,
     });
   }
@@ -712,7 +716,27 @@ function addLineToken(
   });
 }
 
-function declarationSemanticType(keyword: string): string {
+function nearestContainerKind(stack: Array<{ kind: string }>): string | null {
+  for (let index = stack.length - 1; index >= 0; index--) {
+    const kind = stack[index].kind;
+    if (kind === "class" || kind === "tag") return kind;
+  }
+
+  return null;
+}
+
+function fieldSemanticType(containerKind: string | null, fallback: string): string {
+  switch (containerKind) {
+    case "class":
+      return "classField";
+    case "tag":
+      return "tagField";
+    default:
+      return fallback;
+  }
+}
+
+function declarationSemanticType(keyword: string, containerKind: string | null): string {
   switch (keyword) {
     case "class":
       return "class";
@@ -720,7 +744,7 @@ function declarationSemanticType(keyword: string): string {
       return "tag";
     case "prop":
     case "attr":
-      return "property";
+      return fieldSemanticType(containerKind, "property");
     default:
       return "method";
   }

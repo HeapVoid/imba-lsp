@@ -127,13 +127,13 @@ Zed tree-sitter highlights are still present, but semantic highlighting comes fr
 
 The LSP currently emits source-aware tokens for:
 
-- declarations and fields;
-- tag names, classes, attributes, and events;
+- declarations, including distinct `classField` and `tagField` tokens for Imba class/tag members;
+- tag names, classes, `tagAttribute` attributes, and events;
 - object keys;
 - CSS selectors, properties, and values;
 - compiler token ranges where useful.
 
-Theme color is user/theme-dependent. The extension should expose stable semantic token types; theme tuning belongs in Zed settings/themes.
+Theme color is user/theme-dependent. The extension exposes stable semantic token types and maps the Imba-specific ones through `languages/imba/semantic_token_rules.json`. Theme-specific scopes currently include `imba.class.field`, `imba.tag.field`, and `imba.tag.attribute`.
 
 ## TypeScript Bridge
 
@@ -180,4 +180,3 @@ Useful live Zed checks after rebuilding the dev extension:
 - Browser globals such as `window`, `document`, and `navigator` get TypeScript-backed completions.
 - Go-to-definition works for local declarations and imported `.imba` symbols.
 - Project-wide diagnostics appear for unopened files.
-

@@ -27,7 +27,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - Rust Zed adapter that launches `imba-lsp` through Zed's managed Node runtime
 - compiler-backed diagnostics from native `imba/compiler`
 - document symbols from native `imba/program` outline data, with a local fallback scanner
-- source-aware semantic tokens from native compiler tokens plus Imba-specific source ranges for declarations, fields, tag classes, attributes, events, object keys, and CSS selectors/properties
+- source-aware semantic tokens from native compiler tokens plus Imba-specific source ranges for declarations, class/tag fields, tag attributes/classes, events, object keys, and CSS selectors/properties
 - initial non-TypeScript completions for keywords, document symbols, tags, events, CSS shortcuts, and heuristic member names
 - Imba CSS completions use compiler shortcut aliases, offer property-specific value suggestions, CSS modifiers, and hover help for shortcuts/properties
 - Imba CSS completions index and type project-local `$tokens`, `#color-tokens`, and CSS custom properties for workspace-aware value suggestions and token hovers

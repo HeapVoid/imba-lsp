@@ -48,7 +48,9 @@ const timingSource = [
 
 const semanticSource = [
   "tag app",
+  "\topened = false",
   "\tdef save item: Item, index",
+  "\t\topened = true",
   "\t\titem.active = true",
   "\t\treset!",
   "\t\timba.commit!",
@@ -73,6 +75,19 @@ const objectKeySource = [
 const comparisonSource = [
   "def compare a, b",
   "\treturn a<b",
+  "",
+].join("\n");
+
+const fieldSource = [
+  "class Person",
+  "\tname = 'Ada'",
+  "\tdef rename value",
+  "\t\tname = value",
+  "",
+  "tag profile-card",
+  "\ttitle = ''",
+  "\tdef render",
+  "\t\t<div title=title data-id=title>",
   "",
 ].join("\n");
 
@@ -105,7 +120,7 @@ const comparisonSource = [
   const seenTokenTypes = new Set(decoded.map((token) => token.type));
 
   assert.ok(seenTokenTypes.has("tag"), "expected tag semantic tokens");
-  assert.ok(seenTokenTypes.has("attribute"), "expected attribute semantic tokens");
+  assert.ok(seenTokenTypes.has("tagAttribute"), "expected tag attribute semantic tokens");
   assert.ok(seenTokenTypes.has("tagClass"), "expected tag class semantic tokens");
   assert.ok(seenTokenTypes.has("cssProperty"), "expected CSS property semantic tokens");
   assert.ok(seenTokenTypes.has("cssValue"), "expected CSS value semantic tokens");
@@ -134,34 +149,36 @@ const comparisonSource = [
 
   const decoded = decodeSemanticTokens(semanticSource, tokens);
   assertToken(decoded, "app", "tag", 0, ["declaration", "definition"]);
-  assertToken(decoded, "save", "method", 1, ["declaration", "definition"]);
-  assertToken(decoded, "item", "parameter", 1, ["declaration"]);
-  assertToken(decoded, "Item", "type", 1);
-  assertToken(decoded, "index", "parameter", 1, ["declaration"]);
-  assertToken(decoded, "active", "property", 2);
-  assertToken(decoded, "reset", "function", 3);
-  assertToken(decoded, "commit", "method", 4);
-  assertToken(decoded, "setTimeout", "method", 5);
-  assertToken(decoded, "body", "property", 6);
-  assertToken(decoded, "style", "property", 6);
-  assertToken(decoded, "overflow", "property", 6);
-  assertToken(decoded, "render", "method", 7, ["declaration", "definition"]);
-  assertToken(decoded, "self", "tag", 8);
-  assertToken(decoded, "active", "tagClass", 8);
-  assertToken(decoded, "data-id", "attribute", 8);
-  assertToken(decoded, "click", "event", 8);
-  assertToken(decoded, "var", "function", 8);
-  assertToken(decoded, "--accent", "cssValue", 8);
-  assertToken(decoded, "section", "cssSelector", 9);
-  assertToken(decoded, "card", "tagClass", 9);
-  assertToken(decoded, "bgc", "cssProperty", 10);
-  assertToken(decoded, "&", "cssSelector", 11);
-  assertToken(decoded, "hover", "tagClass", 11);
-  assertToken(decoded, "opacity", "cssProperty", 11);
-  assertToken(decoded, "before", "tagClass", 12);
-  assertToken(decoded, "bc", "cssProperty", 12);
-  assertToken(decoded, "h1", "cssSelector", 13);
-  assertToken(decoded, "fs", "cssProperty", 13);
+  assertToken(decoded, "opened", "tagField", 1, ["declaration"]);
+  assertToken(decoded, "save", "method", 2, ["declaration", "definition"]);
+  assertToken(decoded, "item", "parameter", 2, ["declaration"]);
+  assertToken(decoded, "Item", "type", 2);
+  assertToken(decoded, "index", "parameter", 2, ["declaration"]);
+  assertToken(decoded, "opened", "tagField", 3, ["declaration"]);
+  assertToken(decoded, "active", "property", 4);
+  assertToken(decoded, "reset", "function", 5);
+  assertToken(decoded, "commit", "method", 6);
+  assertToken(decoded, "setTimeout", "method", 7);
+  assertToken(decoded, "body", "property", 8);
+  assertToken(decoded, "style", "property", 8);
+  assertToken(decoded, "overflow", "property", 8);
+  assertToken(decoded, "render", "method", 9, ["declaration", "definition"]);
+  assertToken(decoded, "self", "tag", 10);
+  assertToken(decoded, "active", "tagClass", 10);
+  assertToken(decoded, "data-id", "tagAttribute", 10);
+  assertToken(decoded, "click", "event", 10);
+  assertToken(decoded, "var", "function", 10);
+  assertToken(decoded, "--accent", "cssValue", 10);
+  assertToken(decoded, "section", "cssSelector", 11);
+  assertToken(decoded, "card", "tagClass", 11);
+  assertToken(decoded, "bgc", "cssProperty", 12);
+  assertToken(decoded, "&", "cssSelector", 13);
+  assertToken(decoded, "hover", "tagClass", 13);
+  assertToken(decoded, "opacity", "cssProperty", 13);
+  assertToken(decoded, "before", "tagClass", 14);
+  assertToken(decoded, "bc", "cssProperty", 14);
+  assertToken(decoded, "h1", "cssSelector", 15);
+  assertToken(decoded, "fs", "cssProperty", 15);
 }
 
 {
@@ -196,6 +213,22 @@ const comparisonSource = [
     false,
     "less-than expressions must not be scanned as tags",
   );
+}
+
+{
+  const uri = pathToFileURL(fixturePath).toString();
+  const document = TextDocument.create(uri, "imba", 1, fieldSource);
+  const tokens = buildSemanticTokenData(document, undefined);
+  assertSemanticTokensAreWellFormed(fieldSource, tokens);
+
+  const decoded = decodeSemanticTokens(fieldSource, tokens);
+  assertToken(decoded, "Person", "class", 0, ["declaration", "definition"]);
+  assertToken(decoded, "name", "classField", 1, ["declaration"]);
+  assertToken(decoded, "name", "classField", 3, ["declaration"]);
+  assertToken(decoded, "profile-card", "tag", 5, ["declaration", "definition"]);
+  assertToken(decoded, "title", "tagField", 6, ["declaration"]);
+  assertToken(decoded, "title", "tagAttribute", 8);
+  assertToken(decoded, "data-id", "tagAttribute", 8);
 }
 
 console.log("diagnostics.test ok");

@@ -10,6 +10,7 @@ const source = [
   "tag app",
   "\tdef render",
   "\t\t<div.card [pos:abs]> 'Hi'",
+  "\t\t<div.card data-items=[items[index]] @click=save [d:flex g:]> 'Complex'",
   "\tcss .card",
   "\t\t",
   "\t\tbgc:red5",
@@ -107,6 +108,16 @@ const inlineValueCompletion = completionLabels(positionAfter("[pos:"));
 assert.ok(inlineValueCompletion.has("abs"));
 assert.ok(inlineValueCompletion.has("rel"));
 assert.ok(inlineValueCompletion.has("sticky"));
+
+const complexInlinePropertyCompletion = completionLabels(positionAfter("@click=save ["));
+assert.ok(complexInlinePropertyCompletion.has("bgc"));
+assert.ok(complexInlinePropertyCompletion.has("maw"));
+assert.equal(buildCssCompletionItems(document, positionAfter("items["), null, workspaceTokens), null);
+
+const complexInlineGapCompletion = completionLabels(positionAfter("d:flex g:"));
+assert.ok(complexInlineGapCompletion.has("8"));
+assert.ok(complexInlineGapCompletion.has("16px"));
+assert.equal(complexInlineGapCompletion.has("grid"), false);
 
 const shortcutHover = hoverText(buildCssHover(document, positionAfter("bgc"), null));
 assert.match(shortcutHover, /Imba CSS shortcut `bgc`/);

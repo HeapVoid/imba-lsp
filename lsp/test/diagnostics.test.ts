@@ -58,6 +58,9 @@ const semanticSource = [
   "\t\t<self.active @click=save data-id=index [c:red5 bgc:var(--accent)]>",
   "\tcss section.card",
   "\t\tbgc:var(--accent)",
+  "\t\t&:hover opacity: 0.9",
+  "\t\t&:before bc: blue5/50",
+  "\t\th1 fs: 24px",
   "",
 ].join("\n");
 
@@ -152,6 +155,13 @@ const comparisonSource = [
   assertToken(decoded, "section", "cssSelector", 9);
   assertToken(decoded, "card", "tagClass", 9);
   assertToken(decoded, "bgc", "cssProperty", 10);
+  assertToken(decoded, "&", "cssSelector", 11);
+  assertToken(decoded, "hover", "tagClass", 11);
+  assertToken(decoded, "opacity", "cssProperty", 11);
+  assertToken(decoded, "before", "tagClass", 12);
+  assertToken(decoded, "bc", "cssProperty", 12);
+  assertToken(decoded, "h1", "cssSelector", 13);
+  assertToken(decoded, "fs", "cssProperty", 13);
 }
 
 {

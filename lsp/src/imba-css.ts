@@ -795,13 +795,11 @@ function cssContextForPrefix(prefix: string): CssContext {
     return { kind: "modifier" };
   }
 
-  const propertyMatch = prefix.match(
-    /(?:^|[\s\[])([-$#A-Za-z_][\w$#-]*(?:[@.^!]+[\w.-]+)*):[^\n]*$/,
-  );
+  const propertyMatch = lastCssPropertyPrefix(prefix);
   if (propertyMatch) {
     return {
       kind: "value",
-      propertyName: propertyMatch[1],
+      propertyName: propertyMatch,
     };
   }
 
@@ -809,7 +807,7 @@ function cssContextForPrefix(prefix: string): CssContext {
 }
 
 function isCssContext(source: string, position: Position, prefix: string): boolean {
-  if (isInlineStyleContext(prefix)) return true;
+  if (isInlineStyleContext(source, position)) return true;
 
   const lines = source.split("\n");
   const currentIndent = indentOf(lines[position.line] ?? "");
@@ -831,8 +829,55 @@ function isCssContext(source: string, position: Position, prefix: string): boole
   return false;
 }
 
-function isInlineStyleContext(prefix: string): boolean {
-  return prefix.lastIndexOf("[") > prefix.lastIndexOf("]");
+function lastCssPropertyPrefix(prefix: string): string | null {
+  const pattern = /(?:^|[\s\[])([-$#A-Za-z_][\w$#-]*(?:[@.^!]+[\w.-]+)*):/g;
+  let match: RegExpExecArray | null;
+  let property: string | null = null;
+
+  while ((match = pattern.exec(prefix)) !== null) {
+    property = match[1] ?? null;
+  }
+
+  return property;
+}
+
+function isInlineStyleContext(source: string, position: Position): boolean {
+  const line = lineAt(source, position.line);
+  return inlineStyleStartBeforePosition(line, position.character) !== null;
+}
+
+function inlineStyleStartBeforePosition(line: string, character: number): number | null {
+  const tagStart = line.lastIndexOf("<", character);
+  const tagEnd = line.lastIndexOf(">", character);
+  if (tagStart === -1 || tagEnd > tagStart) return null;
+
+  for (let index = tagStart + 1; index < character; index++) {
+    if (line[index] !== "[") continue;
+    if (!isPotentialInlineStyleStart(line, index)) continue;
+
+    const close = line.indexOf("]", index + 1);
+    if (close !== -1 && close < character) {
+      index = close;
+      continue;
+    }
+
+    return index;
+  }
+
+  return null;
+}
+
+function isPotentialInlineStyleStart(line: string, index: number): boolean {
+  const tokenStart = line.slice(0, index).search(/\S+$/);
+  if (tokenStart >= 0 && line.slice(tokenStart, index).includes("=")) return false;
+
+  for (let cursor = index - 1; cursor >= 0; cursor--) {
+    const character = line[cursor];
+    if (/\s/.test(character)) continue;
+    return character !== "=";
+  }
+
+  return true;
 }
 
 function cssTokenAtPosition(

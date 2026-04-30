@@ -154,7 +154,11 @@ const declarationLinePattern =
 const bindingLinePattern = /^(\t*)(?:(let|const|var)\s+)([$A-Za-z_][\w$?!-]*)/;
 const assignmentLinePattern = /^(\t*)([$A-Za-z_][\w$?!-]*)\s*=/;
 const tagSegmentPattern = /<(?!!|\/)(?=[$A-Za-z_.#])([^>\n]*)>?/g;
-const cssSelectorTokenPattern = /([.#])([@$A-Za-z_][\w$-]*)|(^|[\s>+~,(])([@$A-Za-z_][\w$-]*)(?=[\s.#:[>+~),]|$)/g;
+const cssSelectorClassOrIdPattern = /([.#])([@$A-Za-z_][\w$-]*)/g;
+const cssSelectorElementPattern = /(^|[\s>+~,(])([A-Za-z_][\w$-]*)(?=[\s.#:@[>+~),]|$)/g;
+const cssSelectorModifierPattern = /@([@$A-Za-z_][\w$-]*)/g;
+const cssSelectorParentPattern = /&/g;
+const cssSelectorPseudoPattern = /:{1,2}([@$A-Za-z_][\w$-]*)/g;
 const tagClassTokenPattern = /([.#])([@$A-Za-z_][\w$-]*)/g;
 const tagAttributeTokenPattern = /(?:^|\s)([@$A-Za-z_][\w$-]*)(?=\s*(?:=|$|\]))/g;
 const tagEventTokenPattern = /@([@$A-Za-z_][\w$-]*)/g;
@@ -390,7 +394,8 @@ function buildSourceSemanticItems(source: string): SemanticItem[] {
     const cssLine = text.match(/^(\t*)css\b/);
     if (cssLine) {
       cssIndent = indent;
-      scanCssSelector(items, line, text, text.indexOf("css") + 3);
+      const selectorStart = text.indexOf("css") + 3;
+      scanCssSelector(items, line, cssSelectorPrefix(text.slice(selectorStart)), selectorStart);
     } else if (cssIndent !== null && indent > cssIndent) {
       scanCssLine(items, line, text);
     }
@@ -547,12 +552,10 @@ function scanInlineStyleTokens(
   body: string,
   bodyStart: number,
 ): void {
-  const styleStart = body.indexOf("[");
-  const styleEnd = body.indexOf("]", styleStart + 1);
-  if (styleStart === -1 || styleEnd === -1) return;
-
-  const style = body.slice(styleStart + 1, styleEnd);
-  scanStyleProperties(items, line, style, bodyStart + styleStart + 1);
+  for (const range of inlineStyleRanges(body)) {
+    const style = body.slice(range.start + 1, range.end);
+    scanStyleProperties(items, line, style, bodyStart + range.start + 1);
+  }
 }
 
 function scanCssLine(
@@ -563,8 +566,9 @@ function scanCssLine(
   const trimmed = text.trimStart();
   if (!trimmed || trimmed.startsWith("#")) return;
 
-  if (/^[.#&:@]/.test(trimmed)) {
-    scanCssSelector(items, line, text, text.length - trimmed.length);
+  const selector = cssSelectorPrefix(trimmed);
+  if (selector.trim()) {
+    scanCssSelector(items, line, selector, text.length - trimmed.length);
   }
 
   const propertyStart = text.length - trimmed.length;
@@ -576,29 +580,95 @@ function scanCssLine(
 function scanCssSelector(
   items: SemanticItem[],
   line: number,
-  text: string,
+  selector: string,
   startCharacter: number,
 ): void {
-  const selector = text.slice(startCharacter);
   let match: RegExpExecArray | null;
-  cssSelectorTokenPattern.lastIndex = 0;
 
-  while ((match = cssSelectorTokenPattern.exec(selector)) !== null) {
-    const prefix = match[1];
-    const classOrId = match[2];
-    const element = match[4];
-
-    if (prefix && classOrId) {
-      addLineToken(items, line, startCharacter + match.index + prefix.length, classOrId.length, prefix === "#" ? "tagId" : "tagClass", {
-        priority: 6,
-      });
-    } else if (element && element !== "css") {
-      const leading = match[3]?.length ?? 0;
-      addLineToken(items, line, startCharacter + match.index + leading, element.length, "cssSelector", {
-        priority: 4,
-      });
-    }
+  cssSelectorParentPattern.lastIndex = 0;
+  while ((match = cssSelectorParentPattern.exec(selector)) !== null) {
+    addLineToken(items, line, startCharacter + match.index, 1, "cssSelector", {
+      priority: 4,
+    });
   }
+
+  cssSelectorClassOrIdPattern.lastIndex = 0;
+  while ((match = cssSelectorClassOrIdPattern.exec(selector)) !== null) {
+    const prefix = match[1] ?? "";
+    const name = match[2] ?? "";
+    addLineToken(items, line, startCharacter + match.index + prefix.length, name.length, prefix === "#" ? "tagId" : "tagClass", {
+      priority: 6,
+    });
+  }
+
+  cssSelectorPseudoPattern.lastIndex = 0;
+  while ((match = cssSelectorPseudoPattern.exec(selector)) !== null) {
+    const name = match[1] ?? "";
+    addLineToken(items, line, startCharacter + match.index + match[0].lastIndexOf(name), name.length, "tagClass", {
+      priority: 6,
+    });
+  }
+
+  cssSelectorModifierPattern.lastIndex = 0;
+  while ((match = cssSelectorModifierPattern.exec(selector)) !== null) {
+    const name = match[1] ?? "";
+    addLineToken(items, line, startCharacter + match.index + 1, name.length, "tagClass", {
+      priority: 6,
+    });
+  }
+
+  cssSelectorElementPattern.lastIndex = 0;
+  while ((match = cssSelectorElementPattern.exec(selector)) !== null) {
+    const element = match[2] ?? "";
+    if (element === "css") continue;
+
+    const leading = match[1]?.length ?? 0;
+    addLineToken(items, line, startCharacter + match.index + leading, element.length, "cssSelector", {
+      priority: 4,
+    });
+  }
+}
+
+function cssSelectorPrefix(text: string): string {
+  const property = firstStylePropertyMatch(text);
+  if (!property) return text;
+
+  return text.slice(0, property.index);
+}
+
+function firstStylePropertyMatch(text: string): RegExpExecArray | null {
+  stylePropertyPattern.lastIndex = 0;
+  return stylePropertyPattern.exec(text);
+}
+
+function inlineStyleRanges(body: string): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = [];
+
+  for (let index = 0; index < body.length; index++) {
+    if (body[index] !== "[") continue;
+    if (!isPotentialInlineStyleStart(body, index)) continue;
+
+    const close = body.indexOf("]", index + 1);
+    if (close === -1) break;
+
+    ranges.push({ start: index, end: close });
+    index = close;
+  }
+
+  return ranges;
+}
+
+function isPotentialInlineStyleStart(text: string, index: number): boolean {
+  const tokenStart = text.slice(0, index).search(/\S+$/);
+  if (tokenStart >= 0 && text.slice(tokenStart, index).includes("=")) return false;
+
+  for (let cursor = index - 1; cursor >= 0; cursor--) {
+    const character = text[cursor];
+    if (/\s/.test(character)) continue;
+    return character !== "=";
+  }
+
+  return true;
 }
 
 function scanStyleProperties(

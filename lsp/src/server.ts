@@ -1,3 +1,4 @@
+import path from "node:path";
 import {
   createConnection,
   DiagnosticSeverity,
@@ -19,6 +20,10 @@ import {
   prepareRename,
 } from "./navigation";
 import {
+  buildProjectDiagnostics,
+  type ProjectDiagnosticFile,
+} from "./project-diagnostics";
+import {
   buildSemanticTokenData,
   semanticTokenModifiers,
   semanticTokenTypes,
@@ -31,6 +36,7 @@ import {
 import { filePathFromUri } from "./uri";
 
 const validationDelayMs = 120;
+const projectValidationDelayMs = 1200;
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -42,38 +48,53 @@ interface DocumentState {
 
 const documentState = new Map<string, DocumentState>();
 const pendingValidation = new Map<string, NodeJS.Timeout>();
+const pendingProjectValidation = new Map<string, NodeJS.Timeout>();
 const publishedDiagnostics = new Map<string, string>();
+const projectDiagnosticUris = new Map<string, Set<string>>();
+let workspaceRootPath: string | null = null;
+let projectValidationRun = 0;
 
-connection.onInitialize((_params: InitializeParams): InitializeResult => ({
-  capabilities: {
-    textDocumentSync: TextDocumentSyncKind.Incremental,
-    semanticTokensProvider: {
-      legend: {
-        tokenTypes: [...semanticTokenTypes],
-        tokenModifiers: [...semanticTokenModifiers],
+connection.onInitialize((params: InitializeParams): InitializeResult => {
+  workspaceRootPath = workspaceRootFromInitialize(params);
+
+  return {
+    capabilities: {
+      textDocumentSync: TextDocumentSyncKind.Incremental,
+      semanticTokensProvider: {
+        legend: {
+          tokenTypes: [...semanticTokenTypes],
+          tokenModifiers: [...semanticTokenModifiers],
+        },
+        full: true,
       },
-      full: true,
+      documentSymbolProvider: true,
+      definitionProvider: true,
+      referencesProvider: true,
+      renameProvider: {
+        prepareProvider: true,
+      },
+      hoverProvider: true,
+      completionProvider: {
+        triggerCharacters: [...completionTriggerCharacters],
+        resolveProvider: false,
+      },
     },
-    documentSymbolProvider: true,
-    definitionProvider: true,
-    referencesProvider: true,
-    renameProvider: {
-      prepareProvider: true,
+    serverInfo: {
+      name: "imba-lsp",
+      version: "0.0.1",
     },
-    hoverProvider: true,
-    completionProvider: {
-      triggerCharacters: [...completionTriggerCharacters],
-      resolveProvider: false,
-    },
-  },
-  serverInfo: {
-    name: "imba-lsp",
-    version: "0.0.1",
-  },
-}));
+  };
+});
+
+connection.onInitialized(() => {
+  if (workspaceRootPath) {
+    scheduleProjectValidation(workspaceRootPath);
+  }
+});
 
 documents.onDidOpen((event) => {
   scheduleValidation(event.document);
+  scheduleProjectValidationForDocument(event.document);
 });
 
 documents.onDidChangeContent((event) => {
@@ -82,6 +103,7 @@ documents.onDidChangeContent((event) => {
 
 documents.onDidSave((event) => {
   validateNow(event.document);
+  scheduleProjectValidationForDocument(event.document);
 });
 
 documents.onDidClose((event) => {
@@ -92,6 +114,7 @@ documents.onDidClose((event) => {
     uri: event.document.uri,
     diagnostics: [],
   });
+  scheduleProjectValidationForUri(event.document.uri);
 });
 
 connection.onShutdown(() => {
@@ -99,7 +122,12 @@ connection.onShutdown(() => {
     clearPendingValidation(uri);
   }
 
+  for (const rootPath of pendingProjectValidation.keys()) {
+    clearPendingProjectValidation(rootPath);
+  }
+
   documentState.clear();
+  projectDiagnosticUris.clear();
   publishedDiagnostics.clear();
 });
 
@@ -238,6 +266,64 @@ function validateNow(document: TextDocument): CompileResult {
   return state.result;
 }
 
+function scheduleProjectValidationForDocument(document: TextDocument): void {
+  scheduleProjectValidationForUri(document.uri);
+}
+
+function scheduleProjectValidationForUri(uri: string): void {
+  const sourcePath = filePathFromUri(uri);
+  const rootPath = projectRootFor(sourcePath);
+  if (!rootPath) return;
+
+  scheduleProjectValidation(rootPath);
+}
+
+function scheduleProjectValidation(rootPath: string): void {
+  clearPendingProjectValidation(rootPath);
+
+  const timer = setTimeout(() => {
+    pendingProjectValidation.delete(rootPath);
+    void validateProject(rootPath);
+  }, projectValidationDelayMs);
+
+  pendingProjectValidation.set(rootPath, timer);
+}
+
+async function validateProject(rootPath: string): Promise<void> {
+  const run = ++projectValidationRun;
+  const openUris = new Set(documents.keys());
+  const results = await buildProjectDiagnostics(rootPath, openUris);
+  if (run !== projectValidationRun) return;
+
+  publishProjectDiagnostics(rootPath, results);
+}
+
+function publishProjectDiagnostics(
+  rootPath: string,
+  results: ProjectDiagnosticFile[],
+): void {
+  const seen = new Set<string>();
+
+  for (const result of results) {
+    seen.add(result.uri);
+    if (documents.get(result.uri)) continue;
+
+    if (result.diagnostics.length > 0 || publishedDiagnostics.has(result.uri)) {
+      publishDiagnostics(result.uri, undefined, result.diagnostics);
+    }
+  }
+
+  for (const uri of projectDiagnosticUris.get(rootPath) ?? []) {
+    if (seen.has(uri)) continue;
+    if (documents.get(uri)) continue;
+    if (!publishedDiagnostics.has(uri)) continue;
+
+    publishDiagnostics(uri, undefined, []);
+  }
+
+  projectDiagnosticUris.set(rootPath, seen);
+}
+
 function hasCompilerErrors(result: CompileResult): boolean {
   return result.diagnostics.some((diagnostic) =>
     diagnostic.severity === undefined ||
@@ -270,6 +356,26 @@ function clearPendingValidation(uri: string): void {
     clearTimeout(timer);
     pendingValidation.delete(uri);
   }
+}
+
+function clearPendingProjectValidation(rootPath: string): void {
+  const timer = pendingProjectValidation.get(rootPath);
+  if (timer) {
+    clearTimeout(timer);
+    pendingProjectValidation.delete(rootPath);
+  }
+}
+
+function workspaceRootFromInitialize(params: InitializeParams): string | null {
+  const workspaceFolderUri = params.workspaceFolders?.[0]?.uri;
+  return filePathFromUri(workspaceFolderUri ?? params.rootUri ?? "");
+}
+
+function projectRootFor(sourcePath: string | null): string | null {
+  if (workspaceRootPath) return workspaceRootPath;
+  if (!sourcePath) return null;
+
+  return path.dirname(sourcePath);
 }
 
 function publishOpenImportedDiagnostics(

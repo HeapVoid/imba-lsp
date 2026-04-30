@@ -72,7 +72,7 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 - [x] Add an opt-in `lsp:probe -- --typescript-diagnostics` path and load Imba runtime typings for compiled JS diagnostics.
 - [x] Expand completion with richer Imba-aware post-processing for generated JS names.
 - [ ] Expand docs extraction beyond directly preceding `#` comments.
-- [ ] Expand TypeScript diagnostics to unopened project/imported `.imba` files without noisy duplicate publishes.
+- [x] Expand TypeScript diagnostics to unopened project/imported `.imba` files without noisy duplicate publishes.
 - [ ] Port useful codefix behavior from `typescript-imba-plugin` as reference, with license checks before copying anything.
 
 ## Known Risks

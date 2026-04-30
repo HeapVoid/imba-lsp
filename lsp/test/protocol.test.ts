@@ -172,6 +172,8 @@ class LspClient {
 const serverPath = path.resolve(__dirname, "../src/server.js");
 const fixturePath = path.resolve(__dirname, "../../test/fixtures/protocol.imba");
 const uri = pathToFileURL(fixturePath).toString();
+const projectProblemPath = path.resolve(__dirname, "../../test/fixtures/project-wide-error.imba");
+const projectProblemUri = pathToFileURL(projectProblemPath).toString();
 
 const invalidSource = ["tag app", "\tdef render", "\t\treturn if", ""].join("\n");
 const validSource = [
@@ -243,6 +245,15 @@ main().catch((error: unknown) => {
 
 async function main(): Promise<void> {
   const client = new LspClient(serverPath);
+  fs.writeFileSync(
+    projectProblemPath,
+    [
+      "tag broken",
+      "\tdef render",
+      "\t\treturn if",
+      "",
+    ].join("\n"),
+  );
 
   try {
     const initialize = (await client.request("initialize", {
@@ -274,6 +285,19 @@ async function main(): Promise<void> {
     assert.ok(initialize.capabilities.completionProvider.triggerCharacters?.includes("@"));
 
     client.notify("initialized", {});
+    const projectDiagnosticsPromise = client.waitForNotification(
+      "textDocument/publishDiagnostics",
+      (message) => {
+        const params = message.params as { uri?: string; diagnostics?: unknown[] } | undefined;
+        return params?.uri === projectProblemUri &&
+          Array.isArray(params.diagnostics) &&
+          params.diagnostics.some((diagnostic) =>
+            diagnosticSource(diagnostic) === "imba-parser"
+          );
+      },
+      8000,
+    );
+
     client.notify("textDocument/didOpen", {
       textDocument: {
         uri,
@@ -312,6 +336,9 @@ async function main(): Promise<void> {
       },
     );
     assert.ok(cleanDiagnostics);
+
+    const projectDiagnostics = await projectDiagnosticsPromise;
+    assert.ok(projectDiagnostics);
 
     const symbols = (await client.request("textDocument/documentSymbol", {
       textDocument: { uri },
@@ -763,6 +790,7 @@ async function main(): Promise<void> {
     assert.ok(typingTokenTexts.has("doc"));
     assert.equal(typingTokenTexts.has("Person"), false);
   } finally {
+    fs.rmSync(projectProblemPath, { force: true });
     await client.shutdown();
   }
 

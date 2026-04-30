@@ -30,6 +30,7 @@ export const semanticTokenTypes = [
   // Imba-specific token types styled by languages/imba/semantic_token_rules.json.
   "tag",
   "attribute",
+  "objectKey",
   "cssProperty",
   "cssValue",
   "boolean",
@@ -294,6 +295,10 @@ function classify(type: string, context: ClassificationContext): string | null {
 
     if (previousType === "CLASS") {
       return "class";
+    }
+
+    if (nextType === ":") {
+      return "objectKey";
     }
 
     if (propertyAccessTokens.has(previousType ?? "")) {

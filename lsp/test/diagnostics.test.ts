@@ -57,6 +57,12 @@ const semanticSource = [
   "",
 ].join("\n");
 
+const objectKeySource = [
+  "def data item: Item",
+  "\treturn {name: 'Ada', score: item.score, active: true}",
+  "",
+].join("\n");
+
 {
   const result = compileImba(validSource, fixturePath);
   assert.equal(result.diagnostics.length, 0);
@@ -128,6 +134,24 @@ const semanticSource = [
   assertToken(decoded, "click", "event", 8);
   assertToken(decoded, "var", "function", 8);
   assertToken(decoded, "--accent", "cssValue", 8);
+}
+
+{
+  const uri = pathToFileURL(fixturePath).toString();
+  const document = TextDocument.create(uri, "imba", 1, objectKeySource);
+  const result = compileImba(objectKeySource, fixturePath);
+  assert.equal(result.diagnostics.length, 0);
+  const tokens = buildSemanticTokenData(document, result.compilation);
+  assert.ok(tokens.length > 0, "expected object key semantic tokens");
+  assertSemanticTokensAreWellFormed(objectKeySource, tokens);
+
+  const decoded = decodeSemanticTokens(objectKeySource, tokens);
+  assertToken(decoded, "item", "parameter", 0);
+  assertToken(decoded, "Item", "type", 0);
+  assertToken(decoded, "name", "objectKey", 1);
+  assertToken(decoded, "score", "objectKey", 1);
+  assertToken(decoded, "active", "objectKey", 1);
+  assertToken(decoded, "score", "property", 1);
 }
 
 console.log("diagnostics.test ok");

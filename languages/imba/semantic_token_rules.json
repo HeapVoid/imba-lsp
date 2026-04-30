@@ -8,6 +8,10 @@
     "style": ["attribute", "property"]
   },
   {
+    "token_type": "objectKey",
+    "style": ["property", "attribute"]
+  },
+  {
     "token_type": "cssProperty",
     "style": ["property", "attribute"]
   },

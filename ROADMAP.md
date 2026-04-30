@@ -72,6 +72,7 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 - [x] Add an opt-in `lsp:probe -- --typescript-diagnostics` path and load Imba runtime typings for compiled JS diagnostics.
 - [x] Expand completion with richer Imba-aware post-processing for generated JS names.
 - [x] Add Imba CSS shortcut/property completions, property-specific value suggestions, modifier completions, and hover help.
+- [x] Index workspace-local Imba CSS tokens and CSS custom properties for value completions and hovers.
 - [ ] Expand docs extraction beyond directly preceding `#` comments.
 - [x] Expand TypeScript diagnostics to unopened project/imported `.imba` files without noisy duplicate publishes.
 - [x] Refresh project-wide diagnostics from `.imba` file watcher create/change/delete events.

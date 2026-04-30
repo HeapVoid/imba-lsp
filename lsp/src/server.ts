@@ -16,6 +16,12 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { buildCompletionItems, completionTriggerCharacters } from "./completion";
 import { compileImba, type CompileResult } from "./compiler";
 import {
+  buildWorkspaceCssTokens,
+  isStyleTokenFile,
+  type CssToken,
+  type CssTokenDocument,
+} from "./css-tokens";
+import {
   buildDefinitionLocations,
   buildHover,
   buildReferenceLocations,
@@ -41,6 +47,7 @@ import {
 import { filePathFromUri } from "./uri";
 
 const validationDelayMs = 120;
+const cssTokenRefreshDelayMs = 350;
 const projectFileValidationDelayMs = 180;
 const projectValidationDelayMs = 1200;
 
@@ -54,11 +61,14 @@ interface DocumentState {
 
 const documentState = new Map<string, DocumentState>();
 const pendingValidation = new Map<string, NodeJS.Timeout>();
+let pendingCssTokenRefresh: NodeJS.Timeout | null = null;
 const pendingProjectFileValidation = new Map<string, NodeJS.Timeout>();
 const pendingProjectValidation = new Map<string, NodeJS.Timeout>();
 const publishedDiagnostics = new Map<string, string>();
 const projectDiagnosticUris = new Map<string, Set<string>>();
+let workspaceCssTokens: CssToken[] = [];
 let workspaceRootPath: string | null = null;
+let cssTokenRefreshRun = 0;
 let projectValidationRun = 0;
 let canRegisterWatchedFiles = false;
 
@@ -98,6 +108,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 
 connection.onInitialized(() => {
   if (workspaceRootPath) {
+    scheduleCssTokenRefresh(workspaceRootPath);
     scheduleProjectValidation(workspaceRootPath);
   }
 
@@ -105,20 +116,24 @@ connection.onInitialized(() => {
 });
 
 documents.onDidOpen((event) => {
+  scheduleCssTokenRefreshForUri(event.document.uri);
   scheduleValidation(event.document);
   scheduleProjectValidationForDocument(event.document);
 });
 
 documents.onDidChangeContent((event) => {
+  scheduleCssTokenRefreshForUri(event.document.uri);
   scheduleValidation(event.document);
 });
 
 documents.onDidSave((event) => {
+  scheduleCssTokenRefreshForUri(event.document.uri);
   validateNow(event.document);
   scheduleProjectValidationForDocument(event.document);
 });
 
 documents.onDidClose((event) => {
+  scheduleCssTokenRefreshForUri(event.document.uri);
   clearPendingValidation(event.document.uri);
   documentState.delete(event.document.uri);
   publishedDiagnostics.delete(event.document.uri);
@@ -135,6 +150,10 @@ connection.onDidChangeWatchedFiles((params) => {
   for (const change of params.changes) {
     const sourcePath = filePathFromUri(change.uri);
     const rootPath = projectRootFor(sourcePath);
+    if (sourcePath && rootPath && isStyleTokenFile(rootPath, sourcePath)) {
+      scheduleCssTokenRefresh(rootPath);
+    }
+
     if (!sourcePath || !rootPath || !isProjectImbaFile(rootPath, sourcePath)) {
       continue;
     }
@@ -156,6 +175,8 @@ connection.onDidChangeWatchedFiles((params) => {
 });
 
 connection.onShutdown(() => {
+  clearPendingCssTokenRefresh();
+
   for (const uri of pendingValidation.keys()) {
     clearPendingValidation(uri);
   }
@@ -170,6 +191,7 @@ connection.onShutdown(() => {
 
   documentState.clear();
   projectDiagnosticUris.clear();
+  workspaceCssTokens = [];
   publishedDiagnostics.clear();
 });
 
@@ -202,6 +224,7 @@ connection.onCompletion((params) => {
     params.position,
     filePathFromUri(document.uri),
     compilation,
+    workspaceCssTokens,
   );
 });
 
@@ -269,6 +292,7 @@ connection.onHover((params) => {
     params.position,
     filePathFromUri(document.uri),
     state.result.compilation,
+    workspaceCssTokens,
   );
 });
 
@@ -306,6 +330,31 @@ function validateNow(document: TextDocument): CompileResult {
   publishOpenImportedDiagnostics(document.uri, typeScriptDiagnostics.imported);
 
   return state.result;
+}
+
+function scheduleCssTokenRefreshForUri(uri: string): void {
+  const sourcePath = filePathFromUri(uri);
+  const rootPath = projectRootFor(sourcePath);
+  if (!rootPath) return;
+
+  scheduleCssTokenRefresh(rootPath);
+}
+
+function scheduleCssTokenRefresh(rootPath: string): void {
+  clearPendingCssTokenRefresh();
+
+  pendingCssTokenRefresh = setTimeout(() => {
+    pendingCssTokenRefresh = null;
+    void refreshCssTokens(rootPath);
+  }, cssTokenRefreshDelayMs);
+}
+
+async function refreshCssTokens(rootPath: string): Promise<void> {
+  const run = ++cssTokenRefreshRun;
+  const tokens = await buildWorkspaceCssTokens(rootPath, openCssTokenDocuments());
+  if (run !== cssTokenRefreshRun) return;
+
+  workspaceCssTokens = tokens;
 }
 
 function scheduleProjectValidationForDocument(document: TextDocument): void {
@@ -449,6 +498,13 @@ function clearPendingValidation(uri: string): void {
   }
 }
 
+function clearPendingCssTokenRefresh(): void {
+  if (pendingCssTokenRefresh) {
+    clearTimeout(pendingCssTokenRefresh);
+    pendingCssTokenRefresh = null;
+  }
+}
+
 function clearPendingProjectFileValidation(uri: string): void {
   const timer = pendingProjectFileValidation.get(uri);
   if (timer) {
@@ -477,13 +533,26 @@ function projectRootFor(sourcePath: string | null): string | null {
   return path.dirname(sourcePath);
 }
 
+function openCssTokenDocuments(): CssTokenDocument[] {
+  return [...documents.keys()].flatMap((uri) => {
+    const document = documents.get(uri);
+    if (!document) return [];
+
+    return [{
+      source: document.getText(),
+      sourcePath: filePathFromUri(uri),
+      uri,
+    }];
+  });
+}
+
 function registerWatchedFiles(): void {
   if (!canRegisterWatchedFiles) return;
 
   void connection.client.register(DidChangeWatchedFilesNotification.type, {
     watchers: [
       {
-        globPattern: "**/*.imba",
+        globPattern: "**/*.{imba,css,scss,sass,less}",
         kind: WatchKind.Create | WatchKind.Change | WatchKind.Delete,
       },
     ],

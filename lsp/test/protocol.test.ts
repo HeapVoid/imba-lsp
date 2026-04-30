@@ -306,6 +306,8 @@ async function main(): Promise<void> {
     assert.ok(initialize.capabilities?.completionProvider);
     assert.ok(initialize.capabilities.completionProvider.triggerCharacters?.includes("."));
     assert.ok(initialize.capabilities.completionProvider.triggerCharacters?.includes("@"));
+    assert.ok(initialize.capabilities.completionProvider.triggerCharacters?.includes("$"));
+    assert.ok(initialize.capabilities.completionProvider.triggerCharacters?.includes("#"));
 
     client.notify("initialized", {});
     const projectDiagnosticsPromise = client.waitForNotification(

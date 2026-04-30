@@ -4,6 +4,7 @@ import {
   buildCssCompletionItems,
   buildCssHover,
 } from "../src/imba-css";
+import { collectCssTokensFromSource } from "../src/css-tokens";
 
 const source = [
   "tag app",
@@ -15,8 +16,20 @@ const source = [
   "\t\td:flex",
   "\t\tbg@hover:blue6",
   "\t\tdisplay:grid",
+  "\t\tc:$surface",
+  "\t\tbc:var(--text-primary)",
   "",
 ].join("\n");
+const workspaceTokens = collectCssTokensFromSource(
+  [
+    "global css",
+    "\t$surface: warm1",
+    "\t#brand: blue6",
+    "\t--text-primary: gray9",
+    "",
+  ].join("\n"),
+  "file:///theme.imba",
+);
 
 const document = TextDocument.create(
   "file:///test.imba",
@@ -39,6 +52,9 @@ const colorValueCompletion = completionLabels(positionBefore("red5"));
 assert.ok(colorValueCompletion.has("gray9"));
 assert.ok(colorValueCompletion.has("blue6/40"));
 assert.ok(colorValueCompletion.has("$base9"));
+assert.ok(colorValueCompletion.has("$surface"));
+assert.ok(colorValueCompletion.has("#brand"));
+assert.ok(colorValueCompletion.has("var(--text-primary)"));
 assert.equal(colorValueCompletion.has("maw"), false);
 
 const grayValueCompletion = completionItem(positionBefore("red5"), "gray9");
@@ -70,10 +86,18 @@ const fullPropertyHover = hoverText(buildCssHover(document, positionAfter("displ
 assert.match(fullPropertyHover, /CSS property `display`/);
 assert.match(fullPropertyHover, /Preferred Imba shortcut: `d`/);
 
+const tokenHover = hoverText(buildCssHover(document, positionAfter("$surface"), null, workspaceTokens));
+assert.match(tokenHover, /Project Imba CSS token \$surface/);
+assert.match(tokenHover, /warm1/);
+
+const cssVariableHover = hoverText(buildCssHover(document, positionAfter("--text-primary"), null, workspaceTokens));
+assert.match(cssVariableHover, /Project CSS variable --text-primary/);
+assert.match(cssVariableHover, /gray9/);
+
 console.log("imba-css.test ok");
 
 function completionLabels(position: { line: number; character: number }): Set<string> {
-  const items = buildCssCompletionItems(document, position, null);
+  const items = buildCssCompletionItems(document, position, null, workspaceTokens);
   assert.ok(items, "expected CSS completions");
   return new Set(items.map((item) => item.label));
 }
@@ -82,7 +106,7 @@ function completionItem(
   position: { line: number; character: number },
   label: string,
 ): NonNullable<ReturnType<typeof buildCssCompletionItems>>[number] {
-  const items = buildCssCompletionItems(document, position, null);
+  const items = buildCssCompletionItems(document, position, null, workspaceTokens);
   assert.ok(items, "expected CSS completions");
   const match = items.find((item) => item.label === label);
   assert.ok(match, `missing completion ${JSON.stringify(label)}`);

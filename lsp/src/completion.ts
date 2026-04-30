@@ -7,10 +7,11 @@ import {
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { ImbaCompilation } from "./compiler";
+import type { CssToken } from "./css-tokens";
 import { buildCssCompletionItems } from "./imba-css";
 import { buildTypeScriptCompletionItems } from "./typescript-completion";
 
-export const completionTriggerCharacters = [".", "@", "<", ":", "[", " "] as const;
+export const completionTriggerCharacters = [".", "@", "<", ":", "[", " ", "$", "#"] as const;
 
 const wordCharacterPattern = /[$A-Za-z_0-9?!-]/;
 
@@ -217,12 +218,13 @@ export function buildCompletionItems(
   position: Position,
   sourcePath: string | null,
   compilation: ImbaCompilation | undefined,
+  workspaceCssTokens: CssToken[] = [],
 ): CompletionItem[] {
   const source = document.getText();
   const line = getLine(source, position.line);
   const prefix = line.slice(0, position.character);
   const symbols = collectDocumentCompletions(source, compilation);
-  const cssItems = buildCssCompletionItems(document, position, sourcePath);
+  const cssItems = buildCssCompletionItems(document, position, sourcePath, workspaceCssTokens);
 
   if (cssItems) {
     return uniqueItems(cssItems);

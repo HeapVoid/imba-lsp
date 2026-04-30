@@ -9,6 +9,10 @@ import {
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { resolveImbaCompiler } from "./compiler";
+import {
+  collectCssTokensFromSource,
+  type CssToken,
+} from "./css-tokens";
 
 type CssAliasTarget = string | string[];
 
@@ -379,12 +383,14 @@ export function buildCssCompletionItems(
   document: TextDocument,
   position: Position,
   sourcePath: string | null,
+  workspaceTokens: CssToken[] = [],
 ): CompletionItem[] | null {
   const source = document.getText();
   const line = lineAt(source, position.line);
   const prefix = line.slice(0, position.character);
   if (!isCssContext(source, position, prefix)) return null;
 
+  const cssTokens = cssTokensForDocument(document, workspaceTokens);
   const context = cssContextForPrefix(prefix);
   if (context.kind === "modifier") {
     const replacementRange = modifierRangeAtPosition(document, position);
@@ -401,7 +407,7 @@ export function buildCssCompletionItems(
   const replacementRange = wordRangeAtPosition(document, position);
   if (context.kind === "value") {
     return uniqueItems(
-      valueItemsForProperty(context.propertyName ?? "", sourcePath).map((entry) =>
+      valueItemsForProperty(context.propertyName ?? "", sourcePath, cssTokens).map((entry) =>
         withReplacementRange(entry, replacementRange),
       ),
     );
@@ -418,6 +424,7 @@ export function buildCssHover(
   document: TextDocument,
   position: Position,
   sourcePath: string | null,
+  workspaceTokens: CssToken[] = [],
 ): Hover | null {
   const source = document.getText();
   const line = lineAt(source, position.line);
@@ -426,6 +433,17 @@ export function buildCssHover(
   const token = cssTokenAtPosition(document, position);
   if (!token) return null;
 
+  const cssToken = cssTokenForName(token.name, document, workspaceTokens);
+  if (cssToken) {
+    return {
+      contents: {
+        kind: MarkupKind.Markdown,
+        value: cssTokenHoverMarkdown(cssToken),
+      },
+      range: token.range,
+    };
+  }
+
   const name = cssPropertyNameFromToken(token.name);
   const info = propertyInfoFor(name, sourcePath);
   if (!info) return null;
@@ -433,7 +451,7 @@ export function buildCssHover(
   return {
     contents: {
       kind: MarkupKind.Markdown,
-      value: cssPropertyHoverMarkdown(info, sourcePath),
+      value: cssPropertyHoverMarkdown(info, sourcePath, cssTokensForDocument(document, workspaceTokens)),
     },
     range: token.range,
   };
@@ -459,13 +477,18 @@ function propertyItem(info: CssPropertyInfo): CompletionItem {
 function valueItemsForProperty(
   propertyName: string,
   sourcePath: string | null,
+  tokens: CssToken[],
 ): CompletionItem[] {
   const canonical = canonicalCssProperty(propertyName, sourcePath);
+  const tokenItems = projectTokenItemsForProperty(canonical, tokens);
   const values = valuesForCanonicalProperty(canonical, sourcePath);
 
-  return values.map((value) =>
-    item(value, CompletionItemKind.Value, `CSS value for ${canonical || propertyName}`, "20"),
-  );
+  return [
+    ...tokenItems,
+    ...values.map((value) =>
+      item(value, CompletionItemKind.Value, `CSS value for ${canonical || propertyName}`, "20"),
+    ),
+  ];
 }
 
 function valuesForCanonicalProperty(
@@ -530,6 +553,7 @@ function variantValuesForProperty(
 function cssPropertyHoverMarkdown(
   info: CssPropertyInfo,
   sourcePath: string | null,
+  tokens: CssToken[] = [],
 ): string {
   const lines = [
     info.type === "shortcut"
@@ -548,12 +572,89 @@ function cssPropertyHoverMarkdown(
   }
 
   const canonical = info.canonical;
-  const values = valuesForCanonicalProperty(canonical, sourcePath).slice(0, 18);
+  const tokenValues = projectTokenItemsForProperty(canonical, tokens).map((entry) => entry.label);
+  const values = [
+    ...tokenValues,
+    ...valuesForCanonicalProperty(canonical, sourcePath),
+  ].slice(0, 18);
   if (values.length > 0) {
     lines.push("", `Common values: ${values.map((value) => `\`${value}\``).join(", ")}.`);
   }
 
   return lines.join("\n");
+}
+
+function projectTokenItemsForProperty(
+  canonical: string,
+  tokens: CssToken[],
+): CompletionItem[] {
+  return tokens
+    .filter((token) => isUsefulTokenForProperty(token, canonical))
+    .map((token) =>
+      item(
+        token.insertText,
+        CompletionItemKind.Variable,
+        cssTokenDetail(token),
+        "05",
+        cssTokenHoverMarkdown(token),
+      ),
+    );
+}
+
+function isUsefulTokenForProperty(token: CssToken, canonical: string): boolean {
+  if (colorPropertyPattern.test(canonical) || borderColorPattern.test(canonical)) return true;
+  return token.kind !== "imba-color-variable";
+}
+
+function cssTokenForName(
+  name: string,
+  document: TextDocument,
+  workspaceTokens: CssToken[],
+): CssToken | null {
+  const tokens = cssTokensForDocument(document, workspaceTokens);
+  return tokens.find((token) =>
+    token.name === name ||
+    token.insertText === name ||
+    (token.kind === "css-variable" && token.insertText === `var(${name})`)
+  ) ?? null;
+}
+
+function cssTokensForDocument(
+  document: TextDocument,
+  workspaceTokens: CssToken[],
+): CssToken[] {
+  const documentTokens = collectCssTokensFromSource(document.getText(), document.uri);
+  return uniqueCssTokens([...documentTokens, ...workspaceTokens]);
+}
+
+function cssTokenDetail(token: CssToken): string {
+  switch (token.kind) {
+    case "css-variable":
+      return `Project CSS variable ${token.name}`;
+    case "imba-color-variable":
+      return `Project Imba color token ${token.name}`;
+    default:
+      return `Project Imba CSS token ${token.name}`;
+  }
+}
+
+function cssTokenHoverMarkdown(token: CssToken): string {
+  const lines = [
+    `${cssTokenDetail(token)}.`,
+    "",
+    `Value: \`${token.value || "(empty)"}\`.`,
+  ];
+  const location = cssTokenLocation(token);
+  if (location) {
+    lines.push("", `Defined in \`${location}\`.`);
+  }
+
+  return lines.join("\n");
+}
+
+function cssTokenLocation(token: CssToken): string | null {
+  if (!token.sourcePath) return null;
+  return `${token.sourcePath}:${token.range.start.line + 1}:${token.range.start.character + 1}`;
 }
 
 function propertyInfoFor(
@@ -826,6 +927,21 @@ function uniqueItems(items: CompletionItem[]): CompletionItem[] {
 
 function uniqueStrings(items: string[]): string[] {
   return [...new Set(items)].sort();
+}
+
+function uniqueCssTokens(tokens: CssToken[]): CssToken[] {
+  const seen = new Set<string>();
+  const result: CssToken[] = [];
+
+  for (const token of tokens) {
+    const key = `${token.kind}:${token.name}:${token.insertText}`;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    result.push(token);
+  }
+
+  return result;
 }
 
 function pushMap(map: Map<string, string[]>, key: string, value: string): void {

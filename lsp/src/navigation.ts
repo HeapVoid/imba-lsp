@@ -17,6 +17,7 @@ import {
   buildTypeScriptRenameLocations,
 } from "./typescript-navigation";
 import type { ImbaCompilation } from "./compiler";
+import type { CssToken } from "./css-tokens";
 import { buildCssHover } from "./imba-css";
 
 type SymbolKind = "class" | "tag" | "method" | "property" | "field" | "local";
@@ -85,8 +86,9 @@ export function buildHover(
   position: Position,
   sourcePath: string | null,
   compilation: ImbaCompilation | undefined,
+  workspaceCssTokens: CssToken[] = [],
 ): Hover | null {
-  const cssHover = buildCssHover(document, position, sourcePath);
+  const cssHover = buildCssHover(document, position, sourcePath, workspaceCssTokens);
   if (cssHover) return cssHover;
 
   const token = tokenAtPosition(document, position);

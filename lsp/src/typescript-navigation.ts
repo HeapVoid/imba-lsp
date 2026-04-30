@@ -9,11 +9,14 @@ import {
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import * as ts from "typescript";
+import type { ImbaCompilation } from "./compiler";
+import { sourceOffsetToGeneratedOffset } from "./source-map";
 import { createTypeScriptLanguageService } from "./typescript-service";
 
 interface ExpressionContext {
   expression: string;
   targetOffset: number;
+  tokenStartOffset: number;
   tokenRange: Range;
 }
 
@@ -23,13 +26,15 @@ export function buildTypeScriptHover(
   document: TextDocument,
   position: Position,
   sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
 ): Hover | null {
   const context = expressionContextAt(document, position);
   if (!context) return null;
 
-  const probe = createExpressionProbe(context, sourcePath);
-  const service = createTypeScriptLanguageService(probe.fileName, probe.source);
-  const quickInfo = service.getQuickInfoAtPosition(probe.fileName, probe.offset);
+  const compiledQuickInfo = getCompiledQuickInfo(document, context, sourcePath, compilation);
+  const quickInfo = isUsefulQuickInfo(compiledQuickInfo)
+    ? compiledQuickInfo
+    : getExpressionQuickInfo(context, sourcePath) ?? compiledQuickInfo;
   const display = ts.displayPartsToString(quickInfo?.displayParts ?? []);
   if (!display) return null;
 
@@ -49,18 +54,91 @@ export function buildTypeScriptDefinitionLocations(
   document: TextDocument,
   position: Position,
   sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
 ): Location[] {
   const context = expressionContextAt(document, position);
   if (!context) return [];
 
+  const compiledDefinitions = getCompiledDefinitionLocations(
+    document,
+    context,
+    sourcePath,
+    compilation,
+  );
+  if (compiledDefinitions.length > 0) return compiledDefinitions;
+
   const probe = createExpressionProbe(context, sourcePath);
-  const service = createTypeScriptLanguageService(probe.fileName, probe.source);
-  const definitions = service.getDefinitionAtPosition(probe.fileName, probe.offset) ?? [];
+  const definitions = definitionLocations(probe.service, probe.fileName, probe.offset);
+
+  return definitions;
+}
+
+function getCompiledQuickInfo(
+  document: TextDocument,
+  context: ExpressionContext,
+  sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
+): ts.QuickInfo | undefined {
+  const generated = compilation?.js;
+  if (!generated) return undefined;
+
+  const mapping = sourceOffsetToGeneratedOffset(
+    compilation,
+    document.getText(),
+    context.tokenStartOffset,
+  );
+  if (!mapping) return undefined;
+
+  const fileName = `${sourcePath ?? path.join(process.cwd(), "untitled.imba")}.compiled.js`;
+  const service = createTypeScriptLanguageService(fileName, generated);
+  return service.getQuickInfoAtPosition(fileName, mapping.offset);
+}
+
+function getCompiledDefinitionLocations(
+  document: TextDocument,
+  context: ExpressionContext,
+  sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
+): Location[] {
+  const generated = compilation?.js;
+  if (!generated) return [];
+
+  const mapping = sourceOffsetToGeneratedOffset(
+    compilation,
+    document.getText(),
+    context.tokenStartOffset,
+  );
+  if (!mapping) return [];
+
+  const fileName = `${sourcePath ?? path.join(process.cwd(), "untitled.imba")}.compiled.js`;
+  const service = createTypeScriptLanguageService(fileName, generated);
+  return definitionLocations(service, fileName, mapping.offset);
+}
+
+function getExpressionQuickInfo(
+  context: ExpressionContext,
+  sourcePath: string | null,
+): ts.QuickInfo | undefined {
+  const probe = createExpressionProbe(context, sourcePath);
+  return probe.service.getQuickInfoAtPosition(probe.fileName, probe.offset);
+}
+
+function isUsefulQuickInfo(quickInfo: ts.QuickInfo | undefined): boolean {
+  const display = ts.displayPartsToString(quickInfo?.displayParts ?? []).trim();
+  return Boolean(display && display !== "any" && !display.endsWith(": any"));
+}
+
+function definitionLocations(
+  service: ts.LanguageService,
+  fileName: string,
+  offset: number,
+): Location[] {
+  const definitions = service.getDefinitionAtPosition(fileName, offset) ?? [];
   const locations: Location[] = [];
   const seen = new Set<string>();
 
   for (const definition of definitions) {
-    if (definition.fileName === probe.fileName) continue;
+    if (definition.fileName === fileName) continue;
 
     const location = locationForDefinition(service, definition);
     if (!location) continue;
@@ -77,14 +155,16 @@ export function buildTypeScriptDefinitionLocations(
 function createExpressionProbe(
   context: ExpressionContext,
   sourcePath: string | null,
-): { fileName: string; offset: number; source: string } {
+): { fileName: string; offset: number; service: ts.LanguageService; source: string } {
   const prefix = "const __imba_lsp_probe = ";
   const fileName = `${sourcePath ?? path.join(process.cwd(), "untitled.imba")}.ts-nav.js`;
+  const source = `${prefix}${context.expression};\n`;
 
   return {
     fileName,
     offset: prefix.length + context.targetOffset,
-    source: `${prefix}${context.expression};\n`,
+    service: createTypeScriptLanguageService(fileName, source),
+    source,
   };
 }
 
@@ -112,6 +192,7 @@ function expressionContextAt(
   return {
     expression,
     targetOffset: tokenStart - expressionStart,
+    tokenStartOffset: tokenStart,
     tokenRange: Range.create(document.positionAt(tokenStart), document.positionAt(tokenEnd)),
   };
 }

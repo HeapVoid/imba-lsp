@@ -31,6 +31,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - initial TypeScript-backed member completions for compiled Imba expressions such as DOM APIs and local class instances
 - initial local hover and go-to-definition for Imba declarations, fields, and typed local class members
 - initial TypeScript-backed hover and go-to-definition for JS-compatible browser/global expressions
+- initial span-based mapping from Imba source offsets to generated JS offsets via native `locs.spans`
 
 The Tree-sitter grammar is not a complete Imba parser, and it should not be expanded as though it were the main semantic parser. The LSP calls `imba/compiler` directly and keeps the compiler result as document state.
 

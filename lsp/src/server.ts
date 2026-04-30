@@ -120,10 +120,12 @@ connection.onDefinition((params) => {
   const document = documents.get(params.textDocument.uri);
   if (!document) return [];
 
+  const state = currentState(document);
   return buildDefinitionLocations(
     document,
     params.position,
     filePathFromUri(document.uri),
+    state.result.compilation,
   );
 });
 
@@ -131,7 +133,13 @@ connection.onHover((params) => {
   const document = documents.get(params.textDocument.uri);
   if (!document) return null;
 
-  return buildHover(document, params.position, filePathFromUri(document.uri));
+  const state = currentState(document);
+  return buildHover(
+    document,
+    params.position,
+    filePathFromUri(document.uri),
+    state.result.compilation,
+  );
 });
 
 function scheduleValidation(document: TextDocument): void {
@@ -168,7 +176,9 @@ function currentState(document: TextDocument): DocumentState {
   }
 
   const sourcePath = filePathFromUri(document.uri);
-  const result = compileImba(document.getText(), sourcePath);
+  const result = compileImba(document.getText(), sourcePath, {
+    sourcemap: true,
+  });
   const state = {
     version: document.version,
     result,

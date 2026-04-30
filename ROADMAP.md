@@ -54,8 +54,10 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 - [x] Reuse Imba compiler output for a first TypeScript-backed member completion path.
 - [x] Create a minimal TypeScript LanguageService bridge for synthetic compiled JS completions.
 - [x] Add TypeScript-backed hover and go-to-definition fallback for JS-compatible browser/global expressions.
+- [x] Add span-based source mapping from native `locs.spans` for Imba source offsets and generated JS offsets.
+- [x] Use compiler source spans as the first TypeScript hover/go-to-definition path, with fallback for weak `any` results.
 - [ ] Expand completion with Imba-aware post-processing and source-map/span-backed replacement ranges.
-- [ ] Expand hover and go-to-definition with TypeScript position mapping and cross-file targets.
+- [ ] Expand hover and go-to-definition with cross-file/project TypeScript targets.
 - [ ] Port useful diagnostics/codefix behavior from `typescript-imba-plugin` as reference, with license checks before copying anything.
 
 ## Known Risks
@@ -65,6 +67,6 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 - The public compiler API is usable, but we need to pin the Imba version and watch for compiler API drift.
 - Compiler work may need debounce or worker-thread isolation for large files.
 - VS Code completions depend on a custom bridge, while the TypeScript plugin's standard `getCompletionsAtPosition` currently returns `null`.
-- Completion, hover, and go-to-definition require TypeScript LanguageService integration plus Imba-to-compiled-output position mapping.
+- Completion, hover, and go-to-definition require TypeScript LanguageService integration plus careful Imba-to-compiled-output position mapping.
 - CSS in Imba is its own compiled DSL, not raw CSS; Zed injection should stay conservative.
 - Zed extension publishing requires a valid accepted license for extension code.

@@ -10,6 +10,7 @@ import {
   buildTypeScriptDefinitionLocations,
   buildTypeScriptHover,
 } from "./typescript-navigation";
+import type { ImbaCompilation } from "./compiler";
 
 type SymbolKind = "class" | "tag" | "method" | "property" | "field" | "local";
 
@@ -55,28 +56,32 @@ export function buildDefinitionLocations(
   document: TextDocument,
   position: Position,
   sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
 ): Location[] {
   const token = tokenAtPosition(document, position);
-  if (!token) return buildTypeScriptDefinitionLocations(document, position, sourcePath);
+  if (!token) {
+    return buildTypeScriptDefinitionLocations(document, position, sourcePath, compilation);
+  }
 
   const localLocations = resolveSymbols(document, position, token).map((symbol) =>
     Location.create(document.uri, symbol.range),
   );
   if (localLocations.length > 0) return localLocations;
 
-  return buildTypeScriptDefinitionLocations(document, position, sourcePath);
+  return buildTypeScriptDefinitionLocations(document, position, sourcePath, compilation);
 }
 
 export function buildHover(
   document: TextDocument,
   position: Position,
   sourcePath: string | null,
+  compilation: ImbaCompilation | undefined,
 ): Hover | null {
   const token = tokenAtPosition(document, position);
-  if (!token) return buildTypeScriptHover(document, position, sourcePath);
+  if (!token) return buildTypeScriptHover(document, position, sourcePath, compilation);
 
   const symbol = resolveSymbols(document, position, token)[0];
-  if (!symbol) return buildTypeScriptHover(document, position, sourcePath);
+  if (!symbol) return buildTypeScriptHover(document, position, sourcePath, compilation);
 
   return {
     contents: {

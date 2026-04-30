@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 interface JsonRpcMessage {
   jsonrpc: "2.0";
@@ -313,6 +314,15 @@ async function main(): Promise<void> {
     );
     assert.ok(greetDefinition.has("greet"));
 
+    const importedGreetDefinition = locations(
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "profile.greet"),
+      }),
+    ).find((location) => location.uri.endsWith("/project/profile.imba"));
+    assert.ok(importedGreetDefinition, "expected definition in imported profile.imba");
+    assert.equal(locationText(validSource, uri, importedGreetDefinition), "greet");
+
     const greetHover = hoverText(
       await client.request("textDocument/hover", {
         textDocument: { uri },
@@ -540,20 +550,33 @@ function completionTextEditRangeText(source: string, item: Record<string, unknow
 }
 
 function locationTexts(source: string, result: unknown): Set<string> {
-  const locations = Array.isArray(result) ? result : result ? [result] : [];
   return new Set(
-    locations
-      .map((location) => (location as { range?: LspRange }).range)
-      .filter((range): range is LspRange => Boolean(range))
-      .map((range) => rangeText(source, range)),
+    locations(result).map((location) => rangeText(source, location.range)),
   );
 }
 
 function locationUris(result: unknown): string[] {
-  const locations = Array.isArray(result) ? result : result ? [result] : [];
-  return locations
-    .map((location) => (location as { uri?: unknown }).uri)
-    .filter((uri): uri is string => typeof uri === "string");
+  return locations(result).map((location) => location.uri);
+}
+
+function locations(result: unknown): LspLocation[] {
+  const items = Array.isArray(result) ? result : result ? [result] : [];
+  return items
+    .map((location) => location as { range?: LspRange; uri?: unknown })
+    .filter((location): location is LspLocation =>
+      typeof location.uri === "string" && Boolean(location.range)
+    );
+}
+
+function locationText(
+  inMemorySource: string,
+  inMemoryUri: string,
+  location: LspLocation,
+): string {
+  const source = location.uri === inMemoryUri
+    ? inMemorySource
+    : fs.readFileSync(fileURLToPath(location.uri), "utf8");
+  return rangeText(source, location.range);
 }
 
 function hoverText(result: unknown): string {
@@ -604,6 +627,11 @@ interface LspRange {
     line: number;
     character: number;
   };
+}
+
+interface LspLocation {
+  range: LspRange;
+  uri: string;
 }
 
 function rangeText(source: string, range: LspRange): string {

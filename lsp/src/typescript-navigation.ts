@@ -10,8 +10,15 @@ import {
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import * as ts from "typescript";
 import type { ImbaCompilation } from "./compiler";
-import { sourceOffsetToGeneratedOffset } from "./source-map";
-import { createTypeScriptLanguageService } from "./typescript-service";
+import {
+  generatedOffsetToSourceOffset,
+  sourceOffsetToGeneratedOffset,
+} from "./source-map";
+import {
+  createTypeScriptLanguageService,
+  virtualImbaFileFor,
+  type VirtualImbaFile,
+} from "./typescript-service";
 
 interface ExpressionContext {
   expression: string;
@@ -263,6 +270,11 @@ function locationForDefinition(
   service: ts.LanguageService,
   definition: ts.DefinitionInfo,
 ): Location | null {
+  const virtualImbaFile = virtualImbaFileFor(service, definition.fileName);
+  if (virtualImbaFile) {
+    return locationForVirtualImbaDefinition(virtualImbaFile, definition);
+  }
+
   const sourceFile = service.getProgram()?.getSourceFile(definition.fileName);
   const fileText = sourceFile?.getFullText() ?? ts.sys.readFile(definition.fileName);
   if (!fileText) return null;
@@ -277,6 +289,39 @@ function locationForDefinition(
   return Location.create(
     pathToFileURL(definition.fileName).toString(),
     Range.create(start.line, start.character, end.line, end.character),
+  );
+}
+
+function locationForVirtualImbaDefinition(
+  virtualFile: VirtualImbaFile,
+  definition: ts.DefinitionInfo,
+): Location {
+  const start = generatedOffsetToSourceOffset(
+    virtualFile.compilation,
+    virtualFile.source,
+    definition.textSpan.start,
+  );
+  const end = generatedOffsetToSourceOffset(
+    virtualFile.compilation,
+    virtualFile.source,
+    definition.textSpan.start + Math.max(definition.textSpan.length - 1, 0),
+  );
+  if (!start || !end) {
+    return Location.create(
+      pathToFileURL(virtualFile.sourcePath).toString(),
+      Range.create(0, 0, 0, 0),
+    );
+  }
+
+  const startOffset = start.offset;
+  const endOffset = Math.max(startOffset + 1, end.offset + 1);
+
+  return Location.create(
+    pathToFileURL(virtualFile.sourcePath).toString(),
+    Range.create(
+      positionForOffset(undefined, virtualFile.source, startOffset),
+      positionForOffset(undefined, virtualFile.source, endOffset),
+    ),
   );
 }
 

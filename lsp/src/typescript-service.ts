@@ -1,6 +1,14 @@
 import path from "node:path";
 import * as ts from "typescript";
-import { compileImba } from "./compiler";
+import { compileImba, type ImbaCompilation } from "./compiler";
+
+export interface VirtualImbaFile {
+  compilation: ImbaCompilation;
+  source: string;
+  sourcePath: string;
+}
+
+const virtualImbaFilesByService = new WeakMap<ts.LanguageService, Map<string, VirtualImbaFile>>();
 
 export function createTypeScriptLanguageService(
   fileName: string,
@@ -13,6 +21,7 @@ export function createTypeScriptLanguageService(
     allowJs: true,
   };
   const virtualFiles = new Map<string, string>([[fileName, source]]);
+  const virtualImbaFiles = new Map<string, VirtualImbaFile>();
   const scriptFileNames = [
     fileName,
     ...project.fileNames.filter(
@@ -59,11 +68,21 @@ export function createTypeScriptLanguageService(
           compilerOptions,
           moduleResolutionHost,
           virtualFiles,
+          virtualImbaFiles,
         ),
       ),
   };
 
-  return ts.createLanguageService(host);
+  const service = ts.createLanguageService(host);
+  virtualImbaFilesByService.set(service, virtualImbaFiles);
+  return service;
+}
+
+export function virtualImbaFileFor(
+  service: ts.LanguageService,
+  fileName: string,
+): VirtualImbaFile | undefined {
+  return virtualImbaFilesByService.get(service)?.get(fileName);
 }
 
 interface ProjectConfig {
@@ -129,6 +148,7 @@ function resolveImbaModule(
   moduleName: string,
   containingFile: string,
   virtualFiles: Map<string, string>,
+  virtualImbaFiles: Map<string, VirtualImbaFile>,
 ): ts.ResolvedModuleFull | undefined {
   if (!moduleName.endsWith(".imba")) return undefined;
 
@@ -143,10 +163,16 @@ function resolveImbaModule(
     const result = compileImba(source, sourcePath, {
       sourcemap: true,
     });
-    const js = result.compilation?.js;
-    if (!js) return undefined;
+    const compilation = result.compilation;
+    const js = compilation?.js;
+    if (!compilation || !js) return undefined;
 
     virtualFiles.set(virtualPath, js);
+    virtualImbaFiles.set(virtualPath, {
+      compilation,
+      source,
+      sourcePath,
+    });
   }
 
   return {
@@ -162,8 +188,14 @@ function resolveModuleName(
   compilerOptions: ts.CompilerOptions,
   moduleResolutionHost: ts.ModuleResolutionHost,
   virtualFiles: Map<string, string>,
+  virtualImbaFiles: Map<string, VirtualImbaFile>,
 ): ts.ResolvedModuleFull | undefined {
-  const imbaModule = resolveImbaModule(moduleName, containingFile, virtualFiles);
+  const imbaModule = resolveImbaModule(
+    moduleName,
+    containingFile,
+    virtualFiles,
+    virtualImbaFiles,
+  );
   if (imbaModule) return imbaModule;
 
   return ts.resolveModuleName(

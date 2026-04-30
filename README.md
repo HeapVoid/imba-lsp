@@ -27,6 +27,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - compiler-backed diagnostics from native `imba/compiler`
 - document symbols from native `imba/program` outline data, with a local fallback scanner
 - initial semantic tokens from native compiler tokens
+- initial non-TypeScript completions for keywords, document symbols, tags, events, CSS shortcuts, and heuristic member names
 
 The Tree-sitter grammar is not a complete Imba parser, and it should not be expanded as though it were the main semantic parser. The LSP calls `imba/compiler` directly and keeps the compiler result as document state.
 
@@ -75,7 +76,7 @@ Run the LSP smoke tests:
 npm run lsp:test
 ```
 
-The LSP tests include a protocol-level stdio smoke test. It starts the built server, sends `initialize`, `didOpen`, `didChange`, `textDocument/documentSymbol`, and `textDocument/semanticTokens/full`, and verifies diagnostics/symbols/tokens without requiring Zed.
+The LSP tests include a protocol-level stdio smoke test. It starts the built server, sends `initialize`, `didOpen`, `didChange`, `textDocument/documentSymbol`, `textDocument/semanticTokens/full`, and `textDocument/completion`, and verifies diagnostics/symbols/tokens/completions without requiring Zed.
 
 Probe the LSP adapters against real `.imba` files:
 

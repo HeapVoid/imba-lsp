@@ -35,9 +35,10 @@ Goal: a small Node/TypeScript LSP that calls native `imba/compiler` and makes Ze
 - [x] Compile open documents with debounce and cache the result per document version.
 - [x] Publish diagnostics from `compilation.diagnostics`.
 - [x] Keep `ast`, `tokens`, `js`, `css`, and `locs.spans` in document state.
-- [x] Add protocol-level stdio smoke test for initialize, diagnostics, document symbols, and semantic tokens.
+- [x] Add protocol-level stdio smoke test for initialize, diagnostics, document symbols, semantic tokens, and completions.
 - [x] Implement `textDocument/documentSymbol` from native `imba/program` outline data, with a local fast outline scanner as fallback.
 - [x] Implement initial `textDocument/semanticTokens/full` from native compiler tokens.
+- [x] Implement initial non-TypeScript `textDocument/completion` for keywords, document symbols, tags, events, CSS shortcuts, and heuristic member names.
 - [ ] Upgrade semantic tokens to use richer Imba program symbols where available.
 - [x] Add Zed language-server registration.
 - [x] Verify diagnostics and LSP startup inside a live Zed dev extension.

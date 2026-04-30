@@ -175,8 +175,14 @@ const uri = pathToFileURL(fixturePath).toString();
 const invalidSource = ["tag app", "\tdef render", "\t\treturn if", ""].join("\n");
 const validSource = [
   "tag app",
+  "\tcount = 0",
+  "\tdef save item",
+  "\t\treturn {name: 'Ada', active: item.active}",
   "\tdef render",
+  "\t\tdocument.body.style.overflow = 'hidden'",
   "\t\t<div.card @click=save> \"Hi\"",
+  "\tcss .card",
+  "\t\tbgc:red5",
   "",
   "class Person",
   "\tdef greet",
@@ -199,6 +205,9 @@ async function main(): Promise<void> {
       capabilities: {},
     })) as {
       capabilities?: {
+        completionProvider?: {
+          triggerCharacters?: string[];
+        };
         documentSymbolProvider?: boolean;
         semanticTokensProvider?: unknown;
       };
@@ -206,6 +215,9 @@ async function main(): Promise<void> {
 
     assert.equal(initialize.capabilities?.documentSymbolProvider, true);
     assert.ok(initialize.capabilities?.semanticTokensProvider);
+    assert.ok(initialize.capabilities?.completionProvider);
+    assert.ok(initialize.capabilities.completionProvider.triggerCharacters?.includes("."));
+    assert.ok(initialize.capabilities.completionProvider.triggerCharacters?.includes("@"));
 
     client.notify("initialized", {});
     client.notify("textDocument/didOpen", {
@@ -262,9 +274,90 @@ async function main(): Promise<void> {
     assert.ok(Array.isArray(semanticTokens.data));
     assert.ok(semanticTokens.data.length > 0);
     assert.equal(semanticTokens.data.length % 5, 0);
+
+    const generalCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionBefore(validSource, "\t\tdocument.body"),
+      }),
+    );
+    assert.ok(generalCompletion.has("return"));
+    assert.ok(generalCompletion.has("save"));
+    assert.ok(generalCompletion.has("Person"));
+
+    const memberCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "document."),
+      }),
+    );
+    assert.ok(memberCompletion.has("body"));
+    assert.ok(memberCompletion.has("style"));
+
+    const eventCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "<div.card @"),
+      }),
+    );
+    assert.ok(eventCompletion.has("click"));
+    assert.ok(eventCompletion.has("submit"));
+
+    const cssCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionBefore(validSource, "\t\tbgc:red5"),
+      }),
+    );
+    assert.ok(cssCompletion.has("bgc"));
+    assert.ok(cssCompletion.has("c"));
+
+    const tagCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "\t\t<"),
+      }),
+    );
+    assert.ok(tagCompletion.has("div"));
+    assert.ok(tagCompletion.has("self"));
+    assert.ok(tagCompletion.has("app"));
   } finally {
     await client.shutdown();
   }
 
   console.log("protocol.test ok");
+}
+
+function completionLabels(result: unknown): Set<string> {
+  const items = Array.isArray(result)
+    ? result
+    : ((result as { items?: unknown[] } | undefined)?.items ?? []);
+
+  return new Set(
+    items
+      .map((item) => (item as { label?: unknown }).label)
+      .filter((label): label is string => typeof label === "string"),
+  );
+}
+
+function positionBefore(source: string, needle: string): { line: number; character: number } {
+  const offset = source.indexOf(needle);
+  assert.notEqual(offset, -1, `missing source needle ${JSON.stringify(needle)}`);
+  return positionAtOffset(source, offset);
+}
+
+function positionAfter(source: string, needle: string): { line: number; character: number } {
+  const offset = source.indexOf(needle);
+  assert.notEqual(offset, -1, `missing source needle ${JSON.stringify(needle)}`);
+  return positionAtOffset(source, offset + needle.length);
+}
+
+function positionAtOffset(source: string, offset: number): { line: number; character: number } {
+  const prefix = source.slice(0, offset);
+  const lines = prefix.split("\n");
+
+  return {
+    line: lines.length - 1,
+    character: lines[lines.length - 1].length,
+  };
 }

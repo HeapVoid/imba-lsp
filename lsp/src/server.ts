@@ -7,6 +7,7 @@ import {
 } from "vscode-languageserver/node";
 import { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { buildCompletionItems, completionTriggerCharacters } from "./completion";
 import { compileImba, type CompileResult } from "./compiler";
 import {
   buildSemanticTokenData,
@@ -35,6 +36,10 @@ connection.onInitialize((_params: InitializeParams): InitializeResult => ({
       full: true,
     },
     documentSymbolProvider: true,
+    completionProvider: {
+      triggerCharacters: [...completionTriggerCharacters],
+      resolveProvider: false,
+    },
   },
   serverInfo: {
     name: "imba-lsp",
@@ -87,6 +92,14 @@ connection.onDocumentSymbol((params) => {
   if (!document) return [];
 
   return buildDocumentSymbols(document, filePathFromUri(document.uri));
+});
+
+connection.onCompletion((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return [];
+
+  const state = documentState.get(document.uri);
+  return buildCompletionItems(document, params.position, state?.compilation);
 });
 
 function scheduleValidation(document: TextDocument): void {

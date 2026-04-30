@@ -151,7 +151,6 @@ export function buildSemanticTokenData(
 
   for (const token of tokens) {
     const type = readTokenType(token);
-    const value = readTokenValue(token);
     const span = readTokenSpan(token);
 
     if (!type || !span || span.start < 0 || span.end <= span.start) {
@@ -175,7 +174,11 @@ export function buildSemanticTokenData(
       continue;
     }
 
-    const length = Math.max(1, value.length || end.character - start.character);
+    const length = end.character - start.character;
+    if (length <= 0) {
+      previousType = type;
+      continue;
+    }
 
     items.push({
       line: start.line,
@@ -205,8 +208,19 @@ function encodeSemanticTokens(items: SemanticItem[]): number[] {
   const data: number[] = [];
   let lastLine = 0;
   let lastCharacter = 0;
+  let previousLine = -1;
+  let previousLineEnd = 0;
 
   for (const item of items) {
+    if (item.line !== previousLine) {
+      previousLine = item.line;
+      previousLineEnd = 0;
+    }
+
+    if (item.character < previousLineEnd) {
+      continue;
+    }
+
     const deltaLine = item.line - lastLine;
     const deltaStart = deltaLine === 0 ? item.character - lastCharacter : item.character;
 
@@ -214,6 +228,7 @@ function encodeSemanticTokens(items: SemanticItem[]): number[] {
 
     lastLine = item.line;
     lastCharacter = item.character;
+    previousLineEnd = item.character + item.length;
   }
 
   return data;
@@ -282,11 +297,6 @@ function modifierMask(type: string, previousType: string | null): number {
 function readTokenType(token: ImbaToken): string | null {
   if (typeof token.type === "function") return token.type();
   return token._type ?? null;
-}
-
-function readTokenValue(token: ImbaToken): string {
-  if (typeof token.value === "function") return token.value();
-  return token._value ?? "";
 }
 
 function readTokenSpan(token: ImbaToken): { start: number; end: number } | null {

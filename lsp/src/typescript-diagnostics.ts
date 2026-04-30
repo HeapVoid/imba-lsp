@@ -104,7 +104,6 @@ function mapDiagnosticsForFile(
 
   for (const diagnostic of diagnostics) {
     if (diagnostic.file?.fileName !== fileName) continue;
-    if (!isUsefulDiagnostic(generated, diagnostic)) continue;
 
     const mapped = mapTypeScriptDiagnostic(document, source, compilation, diagnostic);
     if (!mapped) continue;
@@ -160,53 +159,6 @@ function severityForCategory(category: ts.DiagnosticCategory): DiagnosticSeverit
   }
 }
 
-function isUsefulDiagnostic(
-  generated: string,
-  diagnostic: ts.Diagnostic,
-): boolean {
-  const text = diagnosticText(generated, diagnostic);
-  if (/^[_$]/.test(text)) return false;
-  if (text.endsWith("$")) return false;
-  if (isImbaComponentGlobalFalsePositive(generated, diagnostic)) return false;
-  if (isImbaComponentMemberFalsePositive(diagnostic)) return false;
-  if (isKnownWindowExtensionFalsePositive(diagnostic)) return false;
-
-  return true;
-}
-
-function isImbaComponentGlobalFalsePositive(
-  generated: string,
-  diagnostic: ts.Diagnostic,
-): boolean {
-  if (diagnostic.code !== 2339 || diagnostic.start === undefined) return false;
-
-  const text = diagnosticText(generated, diagnostic);
-  if (!knownGlobalNames.has(text)) return false;
-
-  const before = generated.slice(Math.max(0, diagnostic.start - 12), diagnostic.start);
-  return /(?:^|[^\w$])this\.$/.test(before);
-}
-
-function isImbaComponentMemberFalsePositive(diagnostic: ts.Diagnostic): boolean {
-  if (diagnostic.code !== 2339) return false;
-
-  const message = diagnosticMessage(diagnostic);
-  if (!/Component'/.test(message)) return false;
-
-  const property = missingPropertyName(message);
-  return Boolean(property && knownImbaComponentMembers.has(property));
-}
-
-function isKnownWindowExtensionFalsePositive(diagnostic: ts.Diagnostic): boolean {
-  if (diagnostic.code !== 2339) return false;
-
-  const message = diagnosticMessage(diagnostic);
-  if (!/type 'Window & typeof globalThis'/.test(message)) return false;
-
-  const property = missingPropertyName(message);
-  return Boolean(property && knownWindowExtensionMembers.has(property));
-}
-
 function isUsefulMappedDiagnostic(
   source: string,
   mapped: Diagnostic,
@@ -227,49 +179,16 @@ function isImbaEventCallbackArgumentFalsePositive(
     return false;
   }
 
+  // Imba event attributes compile to method(event). A source handler with no
+  // declared argument is still valid Imba; the extra JS argument is introduced
+  // by the compiler lowering, not by the user source.
   return /(?:^|\s)@[\w-]+(?:\.[\w-]+)*=/.test(lineTextAt(source, mapped.range.start.line));
-}
-
-function diagnosticText(generated: string, diagnostic: ts.Diagnostic): string {
-  if (diagnostic.start === undefined) return "";
-  return generated.slice(
-    diagnostic.start,
-    diagnostic.start + Math.max(diagnostic.length ?? 1, 1),
-  );
 }
 
 function diagnosticMessage(diagnostic: ts.Diagnostic): string {
   return ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
 }
 
-function missingPropertyName(message: string): string | null {
-  return message.match(/Property '([^']+)' does not exist/)?.[1] ?? null;
-}
-
 function lineTextAt(source: string, line: number): string {
   return source.split("\n")[line] ?? "";
 }
-
-const knownGlobalNames = new Set([
-  "document",
-  "globalThis",
-  "history",
-  "location",
-  "navigator",
-  "performance",
-  "screen",
-  "window",
-]);
-
-const knownImbaComponentMembers = new Set([
-  "css$var",
-  "data",
-  "ease",
-  "emit",
-  "querySelector",
-  "querySelectorAll",
-]);
-
-const knownWindowExtensionMembers = new Set([
-  "ethereum",
-]);

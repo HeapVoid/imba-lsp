@@ -63,6 +63,9 @@ try {
     "\tdef render",
     "\t\t<self ease @click=close>",
     "\t\t\t<span> data.name",
+    "\tcss self",
+    "\t\tpos: rel",
+    "\t\t&:before bc: blue5/50",
     "",
   ].join("\n");
   const runtimeDocument = TextDocument.create(
@@ -82,6 +85,32 @@ try {
       runtimeResult.compilation,
     ).current,
     [],
+  );
+
+  const ethereumSource = [
+    "def connect",
+    "\twindow.ethereum",
+    "",
+  ].join("\n");
+  const ethereumDocument = TextDocument.create(
+    pathToFileURL(path.join(root, "ethereum.imba")).toString(),
+    "imba",
+    1,
+    ethereumSource,
+  );
+  const ethereumResult = compileImba(ethereumSource, path.join(root, "ethereum.imba"), {
+    sourcemap: true,
+  });
+  assert.equal(ethereumResult.diagnostics.length, 0);
+
+  const ethereumDiagnostics = buildTypeScriptDiagnosticGroups(
+    ethereumDocument,
+    path.join(root, "ethereum.imba"),
+    ethereumResult.compilation,
+  ).current;
+  assert.ok(
+    ethereumDiagnostics.some((item) => item.message.includes("ethereum")),
+    "expected project-owned Window.ethereum diagnostic to remain visible",
   );
 } finally {
   fs.rmSync(root, { force: true, recursive: true });

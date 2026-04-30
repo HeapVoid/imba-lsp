@@ -1,6 +1,7 @@
 import path from "node:path";
 import * as ts from "typescript";
 import { compileImba, type ImbaCompilation } from "./compiler";
+import { imbaRuntimeTypingsFor } from "./imba-runtime-typings";
 
 export interface VirtualImbaFile {
   compilation: ImbaCompilation;
@@ -26,12 +27,19 @@ export function createTypeScriptLanguageService(
     ...options.compilerOptions,
     allowJs: true,
   };
+  const imbaRuntimeTypings = imbaRuntimeTypingsFor(project.currentDirectory);
   const virtualFiles = new Map<string, string>([[fileName, source]]);
+  if (imbaRuntimeTypings) {
+    virtualFiles.set(imbaRuntimeTypings.fileName, imbaRuntimeTypings.source);
+  }
   const virtualImbaFiles = new Map<string, VirtualImbaFile>();
   const scriptFileNames = [
     fileName,
+    ...(imbaRuntimeTypings ? [imbaRuntimeTypings.fileName] : []),
     ...project.fileNames.filter(
-      (projectFile) => path.resolve(projectFile) !== path.resolve(fileName),
+      (projectFile) =>
+        path.resolve(projectFile) !== path.resolve(fileName) &&
+        path.resolve(projectFile) !== path.resolve(imbaRuntimeTypings?.fileName ?? ""),
     ),
   ];
 

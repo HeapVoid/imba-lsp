@@ -1,4 +1,5 @@
 node_modules/
+lsp/dist/
 grammars/
 build/
 parser.dylib

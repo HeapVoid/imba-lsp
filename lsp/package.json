@@ -1,0 +1,24 @@
+{
+  "name": "imba-lsp",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Language server for Imba, backed by the native Imba compiler",
+  "type": "commonjs",
+  "bin": {
+    "imba-lsp": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js --stdio",
+    "test": "npm run build && node dist/test/diagnostics.test.js"
+  },
+  "dependencies": {
+    "imba": "2.0.0-alpha.247",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

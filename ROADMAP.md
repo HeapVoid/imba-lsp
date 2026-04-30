@@ -29,14 +29,15 @@ Goal: base the real language features on Imba's own parser/compiler instead of a
 
 Goal: a small Node/TypeScript LSP that calls native `imba/compiler` and makes Zed useful beyond syntax highlighting.
 
-- [ ] Scaffold `imba-lsp`.
-- [ ] Implement `initialize`, document sync, and shutdown.
-- [ ] Resolve the workspace-local `imba/compiler`, with a pinned fallback dependency.
-- [ ] Compile open documents with debounce and cache the result per document version.
-- [ ] Publish diagnostics from `compilation.diagnostics`.
-- [ ] Keep `ast`, `tokens`, `js`, `css`, and `locs.spans` in document state.
+- [x] Scaffold `imba-lsp`.
+- [x] Implement `initialize`, document sync, and shutdown cleanup.
+- [x] Resolve the workspace-local `imba/compiler`, with a pinned fallback dependency.
+- [x] Compile open documents with debounce and cache the result per document version.
+- [x] Publish diagnostics from `compilation.diagnostics`.
+- [x] Keep `ast`, `tokens`, `js`, `css`, and `locs.spans` in document state.
 - [ ] Implement `textDocument/documentSymbol` from native program/AST data, with the existing fast outline scanner as fallback.
-- [ ] Implement `textDocument/semanticTokens/full` from Imba program tokens.
+- [x] Implement initial `textDocument/semanticTokens/full` from native compiler tokens.
+- [ ] Upgrade semantic tokens to use richer Imba program symbols where available.
 - [ ] Add Zed language-server registration.
 
 ## Phase 4: TypeScript-Aware Features

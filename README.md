@@ -58,6 +58,25 @@ Compile the grammar with Zed's local `wasi-sdk` toolchain:
 npm run zed:build-grammar
 ```
 
+Build the native compiler-backed language server:
+
+```sh
+npm --prefix lsp install
+npm run lsp:build
+```
+
+Run the LSP smoke tests:
+
+```sh
+npm run lsp:test
+```
+
+Run the language server over stdio:
+
+```sh
+node lsp/dist/server.js --stdio
+```
+
 ## Zed Dev Extension
 
 Zed language extensions use:
@@ -69,6 +88,8 @@ Zed language extensions use:
 For local development, install this repository as a Zed dev extension. The grammar registration in `extension.toml` points to this local repository with a `file://` URL and an exact commit SHA. Zed does not accept `rev = "HEAD"` for this local grammar checkout path.
 
 This first phase is grammar-only and intentionally has no `Cargo.toml` or Rust extension code. Adding a no-op Rust crate makes Zed try to compile WebAssembly even though no language server is registered yet.
+
+The LSP is not registered in the Zed extension yet. The next extension step is adding a Rust adapter that launches `node lsp/dist/server.js --stdio` or a packaged executable.
 
 ## References
 

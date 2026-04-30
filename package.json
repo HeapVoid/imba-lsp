@@ -8,7 +8,9 @@
     "generate": "tree-sitter generate",
     "test": "tree-sitter test",
     "parse:sample": "tree-sitter parse examples/sample.imba",
-    "zed:build-grammar": "bash scripts/check-zed-grammar-build.sh"
+    "zed:build-grammar": "bash scripts/check-zed-grammar-build.sh",
+    "lsp:build": "npm --prefix lsp run build",
+    "lsp:test": "npm --prefix lsp test"
   },
   "keywords": [
     "imba",

@@ -1,4 +1,7 @@
-use std::{env, path::Path};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 use zed_extension_api::{self as zed, Result};
 
@@ -14,7 +17,7 @@ impl zed::Extension for ImbaExtension {
         _language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
     ) -> Result<zed::Command> {
-        let server_path = lsp_server_path()?;
+        let server_path = lsp_server_path(worktree)?;
 
         Ok(zed::Command {
             command: zed::node_binary_path()?,
@@ -24,28 +27,43 @@ impl zed::Extension for ImbaExtension {
     }
 }
 
-fn lsp_server_path() -> Result<String> {
-    let path = env::current_dir()
-        .map_err(|error| format!("Could not resolve Imba extension directory: {error}"))?
-        .join("lsp")
-        .join("dist")
-        .join("src")
-        .join("server.js");
-
-    ensure_lsp_server_exists(&path)?;
+fn lsp_server_path(worktree: &zed::Worktree) -> Result<String> {
+    let paths = lsp_server_candidates(worktree)?;
+    let path = paths
+        .first()
+        .ok_or_else(|| "Could not resolve any Imba LSP server candidate path".to_string())?;
 
     Ok(path.to_string_lossy().to_string())
 }
 
-fn ensure_lsp_server_exists(path: &Path) -> Result<()> {
-    if path.is_file() {
-        return Ok(());
+fn lsp_server_candidates(worktree: &zed::Worktree) -> Result<Vec<PathBuf>> {
+    let extension_work_dir = env::current_dir()
+        .map_err(|error| format!("Could not resolve Imba extension work directory: {error}"))?;
+
+    let mut paths = Vec::new();
+
+    if let Some(extension_root) = dev_extension_root(&extension_work_dir) {
+        paths.push(lsp_server_path_in(extension_root));
     }
 
-    Err(format!(
-        "Imba LSP server was not found at {}. Run `npm --prefix lsp install` and `npm run lsp:build`, then reinstall the Zed dev extension.",
-        path.to_string_lossy()
-    ))
+    paths.push(lsp_server_path_in(worktree.root_path()));
+    paths.push(lsp_server_path_in(extension_work_dir));
+
+    Ok(paths)
+}
+
+fn dev_extension_root(extension_work_dir: &Path) -> Option<PathBuf> {
+    let extensions_dir = extension_work_dir.parent()?.parent()?;
+
+    Some(extensions_dir.join("installed").join("imba"))
+}
+
+fn lsp_server_path_in(root: impl AsRef<Path>) -> PathBuf {
+    root.as_ref()
+        .join("lsp")
+        .join("dist")
+        .join("src")
+        .join("server.js")
 }
 
 zed::register_extension!(ImbaExtension);

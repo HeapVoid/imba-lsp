@@ -29,6 +29,10 @@ const invalidSource = ["def bad", "\treturn if", ""].join("\n");
   assert.ok(result.diagnostics.length > 0, "expected parser diagnostics");
   assert.match(result.diagnostics[0].message, /Unexpected|unexpected|parse/i);
   assert.equal(result.diagnostics[0].source, "imba-parser");
+  assert.ok(
+    result.diagnostics[0].range.end.character > result.diagnostics[0].range.start.character,
+    "expected visible non-empty diagnostic range",
+  );
 }
 
 {

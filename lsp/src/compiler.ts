@@ -155,15 +155,22 @@ function normalizeSeverity(value: ImbaDiagnostic["severity"]): DiagnosticSeverit
 }
 
 function normalizeRange(range: ImbaDiagnostic["range"]): LspDiagnostic["range"] {
+  const start = {
+    line: numberOrZero(range?.start?.line),
+    character: numberOrZero(range?.start?.character),
+  };
+  const end = {
+    line: numberOrZero(range?.end?.line),
+    character: numberOrZero(range?.end?.character),
+  };
+
+  if (end.line === start.line && end.character <= start.character) {
+    end.character = start.character + 1;
+  }
+
   return {
-    start: {
-      line: numberOrZero(range?.start?.line),
-      character: numberOrZero(range?.start?.character),
-    },
-    end: {
-      line: numberOrZero(range?.end?.line),
-      character: numberOrZero(range?.end?.character),
-    },
+    start,
+    end,
   };
 }
 

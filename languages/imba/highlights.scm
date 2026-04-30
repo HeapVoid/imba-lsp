@@ -121,8 +121,6 @@
   "]"
   "{"
   "}"
-  "<"
-  ">"
 ] @punctuation.bracket
 
 [

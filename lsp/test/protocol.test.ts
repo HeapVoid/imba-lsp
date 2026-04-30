@@ -323,6 +323,15 @@ async function main(): Promise<void> {
     assert.ok(importedGreetDefinition, "expected definition in imported profile.imba");
     assert.equal(locationText(validSource, uri, importedGreetDefinition), "greet");
 
+    const importedProfileDefinition = locations(
+      await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "new Profile"),
+      }),
+    ).find((location) => location.uri.endsWith("/project/profile.imba"));
+    assert.ok(importedProfileDefinition, "expected class definition in imported profile.imba");
+    assert.equal(locationText(validSource, uri, importedProfileDefinition), "Profile");
+
     const greetHover = hoverText(
       await client.request("textDocument/hover", {
         textDocument: { uri },
@@ -338,6 +347,23 @@ async function main(): Promise<void> {
       }),
     );
     assert.match(importedGreetHover, /Profile\.greet/);
+    assert.match(importedGreetHover, /Imba method/);
+    assert.match(importedGreetHover, /def greet/);
+
+    const importedProfileHover = hoverText(
+      await client.request("textDocument/hover", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "new Profile"),
+      }),
+    );
+    assert.match(importedProfileHover, /Imba class `Profile`/);
+    assert.match(importedProfileHover, /export class Profile/);
+
+    const unknownMemberHover = await client.request("textDocument/hover", {
+      textDocument: { uri },
+      position: positionAfter(validSource, "profile.na"),
+    });
+    assert.equal(unknownMemberHover, null);
 
     const navigatorHover = hoverText(
       await client.request("textDocument/hover", {

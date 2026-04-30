@@ -38,23 +38,10 @@ export function buildTypeScriptHover(
   const context = expressionContextAt(document, position);
   if (!context) return null;
 
-  const compiledQuickInfo = getCompiledQuickInfo(document, context, sourcePath, compilation);
-  const quickInfo = isUsefulQuickInfo(compiledQuickInfo)
-    ? compiledQuickInfo
-    : getExpressionQuickInfo(context, sourcePath) ?? compiledQuickInfo;
-  const display = ts.displayPartsToString(quickInfo?.displayParts ?? []);
-  if (!display) return null;
-
-  const documentation = ts.displayPartsToString(quickInfo?.documentation ?? []);
-  const value = hoverMarkdown(display, documentation);
-
-  return {
-    contents: {
-      kind: MarkupKind.Markdown,
-      value,
-    },
-    range: context.tokenRange,
-  };
+  return (
+    getCompiledHover(document, context, sourcePath, compilation) ??
+    getExpressionHover(context, sourcePath)
+  );
 }
 
 export function buildTypeScriptDefinitionLocations(
@@ -80,25 +67,25 @@ export function buildTypeScriptDefinitionLocations(
   return definitions;
 }
 
-function getCompiledQuickInfo(
+function getCompiledHover(
   document: TextDocument,
   context: ExpressionContext,
   sourcePath: string | null,
   compilation: ImbaCompilation | undefined,
-): ts.QuickInfo | undefined {
+): Hover | null {
   const generated = compilation?.js;
-  if (!generated) return undefined;
+  if (!generated) return null;
 
   const mapping = sourceOffsetToGeneratedOffset(
     compilation,
     document.getText(),
     context.tokenStartOffset,
   );
-  if (!mapping) return undefined;
+  if (!mapping) return null;
 
   const fileName = `${sourcePath ?? path.join(process.cwd(), "untitled.imba")}.compiled.js`;
   const service = createTypeScriptLanguageService(fileName, generated);
-  return service.getQuickInfoAtPosition(fileName, mapping.offset);
+  return hoverFromTypeScriptService(service, fileName, mapping.offset, context.tokenRange);
 }
 
 function getCompiledDefinitionLocations(
@@ -130,9 +117,90 @@ function getExpressionQuickInfo(
   return probe.service.getQuickInfoAtPosition(probe.fileName, probe.offset);
 }
 
+function getExpressionHover(
+  context: ExpressionContext,
+  sourcePath: string | null,
+): Hover | null {
+  const quickInfo = getExpressionQuickInfo(context, sourcePath);
+  if (!isUsefulQuickInfo(quickInfo)) return null;
+
+  return hoverFromQuickInfo(quickInfo, context.tokenRange);
+}
+
 function isUsefulQuickInfo(quickInfo: ts.QuickInfo | undefined): boolean {
   const display = ts.displayPartsToString(quickInfo?.displayParts ?? []).trim();
   return Boolean(display && display !== "any" && !display.endsWith(": any"));
+}
+
+function hoverFromTypeScriptService(
+  service: ts.LanguageService,
+  fileName: string,
+  offset: number,
+  range: Range,
+): Hover | null {
+  const quickInfo = service.getQuickInfoAtPosition(fileName, offset);
+  if (!quickInfo) return null;
+  if (!isUsefulQuickInfo(quickInfo)) return null;
+
+  const virtualHover = virtualImbaHover(service, fileName, offset, quickInfo);
+  if (virtualHover) {
+    return {
+      contents: {
+        kind: MarkupKind.Markdown,
+        value: virtualHover,
+      },
+      range,
+    };
+  }
+
+  return hoverFromQuickInfo(quickInfo, range);
+}
+
+function hoverFromQuickInfo(
+  quickInfo: ts.QuickInfo | undefined,
+  range: Range,
+): Hover | null {
+  const display = ts.displayPartsToString(quickInfo?.displayParts ?? []);
+  if (!display) return null;
+
+  const documentation = ts.displayPartsToString(quickInfo?.documentation ?? []);
+  const value = hoverMarkdown(display, documentation);
+
+  return {
+    contents: {
+      kind: MarkupKind.Markdown,
+      value,
+    },
+    range,
+  };
+}
+
+function virtualImbaHover(
+  service: ts.LanguageService,
+  fileName: string,
+  offset: number,
+  quickInfo: ts.QuickInfo,
+): string | null {
+  const definitions = service.getDefinitionAtPosition(fileName, offset) ?? [];
+
+  for (const definition of definitions) {
+    const virtualFile = virtualImbaFileFor(service, definition.fileName);
+    if (!virtualFile) continue;
+
+    const sourceRange = sourceRangeForVirtualImbaDefinition(virtualFile, definition);
+    if (!sourceRange) continue;
+
+    const declaration = declarationLineAtOffset(virtualFile.source, sourceRange.startOffset);
+    if (!declaration) continue;
+
+    const title = virtualImbaHoverTitle(definition, declaration);
+    const display = ts.displayPartsToString(quickInfo.displayParts ?? []);
+    const documentation = ts.displayPartsToString(quickInfo.documentation ?? []);
+
+    return virtualImbaHoverMarkdown(title, declaration, display, documentation);
+  }
+
+  return null;
 }
 
 function definitionLocations(
@@ -296,6 +364,27 @@ function locationForVirtualImbaDefinition(
   virtualFile: VirtualImbaFile,
   definition: ts.DefinitionInfo,
 ): Location {
+  const sourceRange = sourceRangeForVirtualImbaDefinition(virtualFile, definition);
+  if (!sourceRange) {
+    return Location.create(
+      pathToFileURL(virtualFile.sourcePath).toString(),
+      Range.create(0, 0, 0, 0),
+    );
+  }
+
+  return Location.create(
+    pathToFileURL(virtualFile.sourcePath).toString(),
+    Range.create(
+      positionForOffset(undefined, virtualFile.source, sourceRange.startOffset),
+      positionForOffset(undefined, virtualFile.source, sourceRange.endOffset),
+    ),
+  );
+}
+
+function sourceRangeForVirtualImbaDefinition(
+  virtualFile: VirtualImbaFile,
+  definition: ts.DefinitionInfo,
+): { endOffset: number; startOffset: number } | null {
   const start = generatedOffsetToSourceOffset(
     virtualFile.compilation,
     virtualFile.source,
@@ -306,23 +395,53 @@ function locationForVirtualImbaDefinition(
     virtualFile.source,
     definition.textSpan.start + Math.max(definition.textSpan.length - 1, 0),
   );
-  if (!start || !end) {
-    return Location.create(
-      pathToFileURL(virtualFile.sourcePath).toString(),
-      Range.create(0, 0, 0, 0),
-    );
-  }
+  if (!start || !end) return null;
 
   const startOffset = start.offset;
   const endOffset = Math.max(startOffset + 1, end.offset + 1);
+  return { endOffset, startOffset };
+}
 
-  return Location.create(
-    pathToFileURL(virtualFile.sourcePath).toString(),
-    Range.create(
-      positionForOffset(undefined, virtualFile.source, startOffset),
-      positionForOffset(undefined, virtualFile.source, endOffset),
-    ),
-  );
+function declarationLineAtOffset(source: string, offset: number): string | null {
+  const lineStart = source.lastIndexOf("\n", Math.max(0, offset - 1)) + 1;
+  const nextLineStart = source.indexOf("\n", offset);
+  const lineEnd = nextLineStart === -1 ? source.length : nextLineStart;
+  const declaration = source.slice(lineStart, lineEnd).trim();
+
+  return declaration || null;
+}
+
+function virtualImbaHoverTitle(
+  definition: ts.DefinitionInfo,
+  declaration: string,
+): string {
+  const kind = imbaKindForDefinition(definition, declaration);
+  const name = qualifiedDefinitionName(definition);
+  return `Imba ${kind} \`${name}\``;
+}
+
+function imbaKindForDefinition(
+  definition: ts.DefinitionInfo,
+  declaration: string,
+): string {
+  if (/^(?:export\s+)?tag\s/.test(declaration)) return "tag";
+  if (/^(?:export\s+)?class\s/.test(declaration)) return "class";
+  if (/^(?:export\s+)?def\s/.test(declaration)) return "method";
+  if (/^(?:export\s+)?get\s/.test(declaration)) return "getter";
+  if (/^(?:export\s+)?set\s/.test(declaration)) return "setter";
+  if (/=/.test(declaration) && definition.kind === ts.ScriptElementKind.memberVariableElement) {
+    return "field";
+  }
+
+  return definition.kind || "symbol";
+}
+
+function qualifiedDefinitionName(definition: ts.DefinitionInfo): string {
+  if (definition.containerName && !definition.containerName.includes("/")) {
+    return `${definition.containerName}.${definition.name}`;
+  }
+
+  return definition.name;
 }
 
 function positionForOffset(
@@ -348,6 +467,20 @@ function hoverMarkdown(display: string, documentation: string): string {
     "```ts",
     display,
     "```",
+    documentation,
+  ].filter(Boolean).join("\n\n");
+}
+
+function virtualImbaHoverMarkdown(
+  title: string,
+  declaration: string,
+  display: string,
+  documentation: string,
+): string {
+  return [
+    title,
+    `\`\`\`imba\n${declaration}\n\`\`\``,
+    `\`\`\`ts\n${display}\n\`\`\``,
     documentation,
   ].filter(Boolean).join("\n\n");
 }

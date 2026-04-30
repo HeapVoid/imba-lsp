@@ -12,6 +12,7 @@ import { resolveImbaCompiler } from "./compiler";
 import {
   collectCssTokensFromSource,
   type CssToken,
+  type CssTokenValueKind,
 } from "./css-tokens";
 
 type CssAliasTarget = string | string[];
@@ -378,6 +379,16 @@ const borderColorPattern = /^border(?:-.+)?-color$|^border-[xy]-color$/;
 const borderWidthPattern = /^border(?:-.+)?-width$|^border-[xy]-width$/;
 const borderRadiusPattern = /^border(?:-.+)?-radius$|^radius$/;
 const transformPropertyPattern = /^(?:x|y|z|rotate|scale|scale-x|scale-y|skew-x|skew-y)$/;
+const borderShorthandProperties = new Set([
+  "border",
+  "border-bottom",
+  "border-left",
+  "border-right",
+  "border-top",
+  "border-x",
+  "border-y",
+  "outline",
+]);
 
 export function buildCssCompletionItems(
   document: TextDocument,
@@ -602,8 +613,31 @@ function projectTokenItemsForProperty(
 }
 
 function isUsefulTokenForProperty(token: CssToken, canonical: string): boolean {
-  if (colorPropertyPattern.test(canonical) || borderColorPattern.test(canonical)) return true;
-  return token.kind !== "imba-color-variable";
+  const expected = expectedTokenKindsForProperty(canonical);
+  if (!expected) return token.valueKind === "unknown";
+
+  return expected.has(token.valueKind);
+}
+
+function expectedTokenKindsForProperty(canonical: string): Set<CssTokenValueKind> | null {
+  if (colorPropertyPattern.test(canonical) || borderColorPattern.test(canonical)) {
+    return new Set(["color"]);
+  }
+
+  if (canonical === "font-family") return new Set(["font-family"]);
+  if (canonical === "font-size") return new Set(["font-size", "length"]);
+  if (canonical === "font-weight") return new Set(["font-weight"]);
+  if (canonical === "box-shadow" || canonical === "text-shadow") return new Set(["shadow"]);
+  if (borderRadiusPattern.test(canonical)) return new Set(["radius", "length"]);
+  if (spacingProperties.has(canonical)) return new Set(["spacing", "length"]);
+  if (dimensionProperties.has(canonical)) return new Set(["length"]);
+  if (canonical === "display") return new Set(["display"]);
+  if (canonical === "transition" || canonical.includes("duration") || canonical.includes("delay")) {
+    return new Set(["duration", "easing"]);
+  }
+  if (borderShorthandProperties.has(canonical)) return new Set(["color", "length"]);
+
+  return null;
 }
 
 function cssTokenForName(
@@ -628,13 +662,15 @@ function cssTokensForDocument(
 }
 
 function cssTokenDetail(token: CssToken): string {
+  const kind = token.valueKind === "unknown" ? "" : ` ${token.valueKind}`;
+
   switch (token.kind) {
     case "css-variable":
-      return `Project CSS variable ${token.name}`;
+      return `Project${kind} CSS variable ${token.name}`;
     case "imba-color-variable":
       return `Project Imba color token ${token.name}`;
     default:
-      return `Project Imba CSS token ${token.name}`;
+      return `Project${kind} Imba CSS token ${token.name}`;
   }
 }
 

@@ -29,7 +29,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - source-aware semantic tokens from native compiler tokens plus Imba-specific source ranges for declarations, fields, tag classes, attributes, events, object keys, and CSS selectors/properties
 - initial non-TypeScript completions for keywords, document symbols, tags, events, CSS shortcuts, and heuristic member names
 - Imba CSS completions use compiler shortcut aliases, offer property-specific value suggestions, CSS modifiers, and hover help for shortcuts/properties
-- Imba CSS completions index project-local `$tokens`, `#color-tokens`, and CSS custom properties for workspace-aware value suggestions and token hovers
+- Imba CSS completions index and type project-local `$tokens`, `#color-tokens`, and CSS custom properties for workspace-aware value suggestions and token hovers
 - initial TypeScript-backed member completions for compiled Imba expressions such as DOM APIs and local class instances
 - TypeScript-backed member completions decode compiler-mangled Imba identifiers such as `readyΦ` and `fooΞbar` back to `ready?` and `foo-bar`
 - TypeScript-backed member completions hide generated Imba runtime internals unless an internal-looking prefix is explicitly typed

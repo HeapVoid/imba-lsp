@@ -18,12 +18,18 @@ const source = [
   "\t\tdisplay:grid",
   "\t\tc:$surface",
   "\t\tbc:var(--text-primary)",
+  "\t\tff:sans",
+  "\t\tbxs:none",
   "",
 ].join("\n");
 const workspaceTokens = collectCssTokensFromSource(
   [
     "global css",
     "\t$surface: warm1",
+    "\t$gap: 8px",
+    "\t$layout: flex",
+    "\t$font-main: sans",
+    "\t$shadow-card: 0 4px 12px black/20",
     "\t#brand: blue6",
     "\t--text-primary: gray9",
     "",
@@ -55,6 +61,9 @@ assert.ok(colorValueCompletion.has("$base9"));
 assert.ok(colorValueCompletion.has("$surface"));
 assert.ok(colorValueCompletion.has("#brand"));
 assert.ok(colorValueCompletion.has("var(--text-primary)"));
+assert.equal(colorValueCompletion.has("$gap"), false);
+assert.equal(colorValueCompletion.has("$layout"), false);
+assert.equal(colorValueCompletion.has("$font-main"), false);
 assert.equal(colorValueCompletion.has("maw"), false);
 
 const grayValueCompletion = completionItem(positionBefore("red5"), "gray9");
@@ -64,6 +73,17 @@ const displayValueCompletion = completionLabels(positionBefore("flex"));
 assert.ok(displayValueCompletion.has("grid"));
 assert.ok(displayValueCompletion.has("vflex"));
 assert.ok(displayValueCompletion.has("hcc"));
+assert.ok(displayValueCompletion.has("$layout"));
+assert.equal(displayValueCompletion.has("$surface"), false);
+assert.equal(displayValueCompletion.has("#brand"), false);
+
+const fontValueCompletion = completionLabels(positionBefore("sans"));
+assert.ok(fontValueCompletion.has("$font-main"));
+assert.equal(fontValueCompletion.has("$surface"), false);
+
+const shadowValueCompletion = completionLabels(positionBefore("none"));
+assert.ok(shadowValueCompletion.has("$shadow-card"));
+assert.equal(shadowValueCompletion.has("$surface"), false);
 
 const modifierCompletion = completionLabels(positionAfter("bg@"));
 assert.ok(modifierCompletion.has("@hover"));
@@ -87,11 +107,11 @@ assert.match(fullPropertyHover, /CSS property `display`/);
 assert.match(fullPropertyHover, /Preferred Imba shortcut: `d`/);
 
 const tokenHover = hoverText(buildCssHover(document, positionAfter("$surface"), null, workspaceTokens));
-assert.match(tokenHover, /Project Imba CSS token \$surface/);
+assert.match(tokenHover, /Project color Imba CSS token \$surface/);
 assert.match(tokenHover, /warm1/);
 
 const cssVariableHover = hoverText(buildCssHover(document, positionAfter("--text-primary"), null, workspaceTokens));
-assert.match(cssVariableHover, /Project CSS variable --text-primary/);
+assert.match(cssVariableHover, /Project color CSS variable --text-primary/);
 assert.match(cssVariableHover, /gray9/);
 
 console.log("imba-css.test ok");

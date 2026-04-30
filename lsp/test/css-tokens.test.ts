@@ -30,6 +30,9 @@ async function main(): Promise<void> {
         "global css",
         "\t:root",
         "\t\t$surface: warm1",
+        "\t\t$gap: 8px",
+        "\t\t$font-main: sans",
+        "\t\t$shadow-card: 0 4px 12px black/20",
         "\t\t#brand: blue6",
         "\t\t#nav:hover",
         "\t\t\tc: blue6",
@@ -54,10 +57,18 @@ async function main(): Promise<void> {
     const tokens = await buildWorkspaceCssTokens(root);
     const labels = new Set(tokens.map((token) => token.insertText));
     assert.ok(labels.has("$surface"));
+    assert.ok(labels.has("$gap"));
+    assert.ok(labels.has("$font-main"));
+    assert.ok(labels.has("$shadow-card"));
     assert.ok(labels.has("#brand"));
     assert.ok(labels.has("var(--text-primary)"));
     assert.equal(labels.has("var(--ignored)"), false);
     assert.equal(labels.has("#nav"), false);
+    assert.equal(tokenKind(tokens, "$surface"), "color");
+    assert.equal(tokenKind(tokens, "$gap"), "spacing");
+    assert.equal(tokenKind(tokens, "$font-main"), "font-family");
+    assert.equal(tokenKind(tokens, "$shadow-card"), "shadow");
+    assert.equal(tokenKind(tokens, "var(--text-primary)"), "color");
 
     const openTokens = await buildWorkspaceCssTokens(root, [
       {
@@ -80,4 +91,13 @@ async function main(): Promise<void> {
   }
 
   console.log("css-tokens.test ok");
+}
+
+function tokenKind(
+  tokens: Awaited<ReturnType<typeof buildWorkspaceCssTokens>>,
+  insertText: string,
+): string {
+  const token = tokens.find((item) => item.insertText === insertText);
+  assert.ok(token, `missing token ${insertText}`);
+  return token.valueKind;
 }

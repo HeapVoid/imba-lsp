@@ -6,6 +6,10 @@ authors = ["Heap Void"]
 description = "Imba language support for Zed"
 repository = "https://github.com/imba/imba-lsp"
 
+[language_servers.imba-lsp]
+name = "Imba LSP"
+language = "Imba"
+
 [grammars.imba]
 repository = "file:///Users/fedor/Projects/modules/imba-lsp"
 rev = "bab4fd8aa3a8bc4051d3f5ffe75747f39ab1a5ee"

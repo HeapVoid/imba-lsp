@@ -5,11 +5,11 @@
   "description": "Language server for Imba, backed by the native Imba compiler",
   "type": "commonjs",
   "bin": {
-    "imba-lsp": "./dist/server.js"
+    "imba-lsp": "./dist/src/server.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js --stdio",
+    "start": "node dist/src/server.js --stdio",
     "test": "npm run build && node dist/test/diagnostics.test.js"
   },
   "dependencies": {

@@ -74,7 +74,13 @@ npm run lsp:test
 Run the language server over stdio:
 
 ```sh
-node lsp/dist/server.js --stdio
+node lsp/dist/src/server.js --stdio
+```
+
+Check the Rust Zed adapter:
+
+```sh
+npm run zed:check-extension
 ```
 
 ## Zed Dev Extension
@@ -89,7 +95,14 @@ For local development, install this repository as a Zed dev extension. The gramm
 
 This first phase is grammar-only and intentionally has no `Cargo.toml` or Rust extension code. Adding a no-op Rust crate makes Zed try to compile WebAssembly even though no language server is registered yet.
 
-The LSP is not registered in the Zed extension yet. The next extension step is adding a Rust adapter that launches `node lsp/dist/server.js --stdio` or a packaged executable.
+The LSP is registered in the Zed extension through the Rust adapter in `src/lib.rs`. For local dev-extension testing, build the LSP before reinstalling the extension:
+
+```sh
+npm --prefix lsp install
+npm run lsp:build
+```
+
+The adapter launches Zed's managed Node binary with `lsp/dist/src/server.js --stdio`.
 
 ## References
 

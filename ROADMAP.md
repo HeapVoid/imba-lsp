@@ -38,7 +38,8 @@ Goal: a small Node/TypeScript LSP that calls native `imba/compiler` and makes Ze
 - [ ] Implement `textDocument/documentSymbol` from native program/AST data, with the existing fast outline scanner as fallback.
 - [x] Implement initial `textDocument/semanticTokens/full` from native compiler tokens.
 - [ ] Upgrade semantic tokens to use richer Imba program symbols where available.
-- [ ] Add Zed language-server registration.
+- [x] Add Zed language-server registration.
+- [ ] Verify diagnostics and semantic tokens inside a live Zed dev extension.
 
 ## Phase 4: TypeScript-Aware Features
 

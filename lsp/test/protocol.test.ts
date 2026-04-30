@@ -190,6 +190,16 @@ const validSource = [
   "",
 ].join("\n");
 
+const typingSource = [
+  "def close _event = null",
+  "\tdoc",
+  "\timba.unmount(self)",
+  "\treset!",
+  "\tdocument.body.style.overflow = 'visible'",
+  "\tself",
+  "",
+].join("\n");
+
 main().catch((error: unknown) => {
   console.error(error);
   process.exit(1);
@@ -321,6 +331,27 @@ async function main(): Promise<void> {
     assert.ok(tagCompletion.has("div"));
     assert.ok(tagCompletion.has("self"));
     assert.ok(tagCompletion.has("app"));
+
+    client.notify("textDocument/didChange", {
+      textDocument: {
+        uri,
+        version: 3,
+      },
+      contentChanges: [
+        {
+          text: typingSource,
+        },
+      ],
+    });
+
+    const typingSemanticTokens = (await client.request("textDocument/semanticTokens/full", {
+      textDocument: { uri },
+    })) as { data?: number[] };
+    assert.ok(Array.isArray(typingSemanticTokens.data));
+    const typingTokenTexts = semanticTokenTexts(typingSource, typingSemanticTokens.data);
+    assert.ok(typingTokenTexts.has("close"));
+    assert.ok(typingTokenTexts.has("doc"));
+    assert.equal(typingTokenTexts.has("Person"), false);
   } finally {
     await client.shutdown();
   }
@@ -338,6 +369,33 @@ function completionLabels(result: unknown): Set<string> {
       .map((item) => (item as { label?: unknown }).label)
       .filter((label): label is string => typeof label === "string"),
   );
+}
+
+function semanticTokenTexts(source: string, data: number[]): Set<string> {
+  const lines = source.split("\n");
+  const texts = new Set<string>();
+  let line = 0;
+  let character = 0;
+
+  for (let index = 0; index < data.length; index += 5) {
+    const deltaLine = data[index];
+    const deltaStart = data[index + 1];
+    const length = data[index + 2];
+
+    if (deltaLine === 0) {
+      character += deltaStart;
+    } else {
+      line += deltaLine;
+      character = deltaStart;
+    }
+
+    const text = lines[line]?.slice(character, character + length);
+    if (text) {
+      texts.add(text);
+    }
+  }
+
+  return texts;
 }
 
 function positionBefore(source: string, needle: string): { line: number; character: number } {

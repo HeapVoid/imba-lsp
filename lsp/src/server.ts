@@ -22,7 +22,12 @@ const validationDelayMs = 120;
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
-const documentState = new Map<string, CompileResult>();
+interface DocumentState {
+  version: number;
+  result: CompileResult;
+}
+
+const documentState = new Map<string, DocumentState>();
 const pendingValidation = new Map<string, NodeJS.Timeout>();
 
 connection.onInitialize((_params: InitializeParams): InitializeResult => ({
@@ -80,10 +85,10 @@ connection.languages.semanticTokens.on((params) => {
   const document = documents.get(params.textDocument.uri);
   if (!document) return { data: [] };
 
-  const state = documentState.get(document.uri) ?? validateNow(document);
+  const state = currentState(document);
 
   return {
-    data: buildSemanticTokenData(document, state.compilation),
+    data: buildSemanticTokenData(document, state.result.compilation),
   };
 });
 
@@ -99,7 +104,8 @@ connection.onCompletion((params) => {
   if (!document) return [];
 
   const state = documentState.get(document.uri);
-  return buildCompletionItems(document, params.position, state?.compilation);
+  const compilation = state?.version === document.version ? state.result.compilation : undefined;
+  return buildCompletionItems(document, params.position, compilation);
 });
 
 function scheduleValidation(document: TextDocument): void {
@@ -119,17 +125,31 @@ function scheduleValidation(document: TextDocument): void {
 function validateNow(document: TextDocument): CompileResult {
   clearPendingValidation(document.uri);
 
-  const sourcePath = filePathFromUri(document.uri);
-  const result = compileImba(document.getText(), sourcePath);
-  documentState.set(document.uri, result);
-
+  const state = currentState(document);
   connection.sendDiagnostics({
     uri: document.uri,
     version: document.version,
-    diagnostics: result.diagnostics,
+    diagnostics: state.result.diagnostics,
   });
 
-  return result;
+  return state.result;
+}
+
+function currentState(document: TextDocument): DocumentState {
+  const cached = documentState.get(document.uri);
+  if (cached?.version === document.version) {
+    return cached;
+  }
+
+  const sourcePath = filePathFromUri(document.uri);
+  const result = compileImba(document.getText(), sourcePath);
+  const state = {
+    version: document.version,
+    result,
+  };
+
+  documentState.set(document.uri, state);
+  return state;
 }
 
 function clearPendingValidation(uri: string): void {

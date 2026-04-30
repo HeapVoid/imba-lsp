@@ -2,7 +2,7 @@ id = "imba"
 name = "Imba"
 version = "0.0.1"
 schema_version = 1
-authors = ["Fedor"]
+authors = ["Heap Void"]
 description = "Imba language support for Zed"
 repository = "https://github.com/imba/imba-lsp"
 

@@ -17,4 +17,4 @@ language = "Imba"
 
 [grammars.imba]
 repository = "file:///Users/fedor/Projects/modules/imba-lsp"
-rev = "7c334fb51857d5dfd2c274624c6df9c9e5305a4d"
+rev = "da433ec8386424232a4246610243eed1ffd01d3a"

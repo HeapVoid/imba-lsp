@@ -367,7 +367,15 @@ module.exports = grammar({
     css_selector: ($) => choice($.css_complex_selector, $.css_custom_selector, $.css_class_selector, $.css_element_selector),
 
     css_complex_selector: () =>
-      token(prec(1, choice(/[.&:#%][^\n]*,[^\n]*/, /[.&:#%A-Za-z_][^\n:]*[ \t]+[^\n:]*/))),
+      token(
+        prec(
+          1,
+          choice(
+            /[.&:#%>][^\n]*(?:[ \t]+|>>>|[>+~]|,)[^\n]*/,
+            /[A-Za-z_][A-Za-z0-9_-]*(?:[.#][^\s\n:]*)?(?:[ \t]+|>>>|[>+~]|,)[^\n]*/,
+          ),
+        ),
+      ),
 
     css_custom_selector: () =>
       token(prec(-1, /[A-Za-z][A-Za-z0-9_-]*(?:[.#][^\s\n:]*)?(?:@[A-Za-z0-9_-]+(?:\([^\n)]*\))?)?/)),

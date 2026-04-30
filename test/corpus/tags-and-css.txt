@@ -57,6 +57,8 @@ tag app-root
 		.title
 			c:blue6
 			&:hover opacity: 0.9
+		plus-icon :hover >>> svg
+			rotate:90deg
 		# Narrow layout
 		@media (max-width: 800px)
 			d:block
@@ -91,6 +93,13 @@ tag app-root
                 (css_value))
               (css_inline_rule
                 (css_inline_content))))
+          (css_rule
+            (css_selector
+              (css_complex_selector))
+            (css_block
+              (css_declaration
+                (style_property_name)
+                (css_value))))
           (css_comment)
           (css_at_rule
             (css_at_keyword)

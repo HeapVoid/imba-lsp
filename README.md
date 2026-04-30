@@ -144,6 +144,7 @@ For local dev-extension testing, Zed must be able to find `rustc` through the GU
 
 ## References
 
+- Internal implementation notes: [INTERNALS.md](INTERNALS.md)
 - Native parser architecture notes: [docs/native-parser-analysis.md](docs/native-parser-analysis.md)
 - Zed language extension docs: https://zed.dev/docs/extensions/languages
 - Zed extension development docs: https://zed.dev/docs/extensions/developing-extensions

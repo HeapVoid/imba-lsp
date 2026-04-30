@@ -8,16 +8,22 @@ export interface VirtualImbaFile {
   sourcePath: string;
 }
 
+export interface TypeScriptLanguageServiceOptions {
+  compilerOptions?: ts.CompilerOptions;
+}
+
 const virtualImbaFilesByService = new WeakMap<ts.LanguageService, Map<string, VirtualImbaFile>>();
 
 export function createTypeScriptLanguageService(
   fileName: string,
   source: string,
+  options: TypeScriptLanguageServiceOptions = {},
 ): ts.LanguageService {
   const project = projectConfigFor(fileName);
   const compilerOptions: ts.CompilerOptions = {
     ...defaultCompilerOptions,
     ...project.compilerOptions,
+    ...options.compilerOptions,
     allowJs: true,
   };
   const virtualFiles = new Map<string, string>([[fileName, source]]);

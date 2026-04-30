@@ -1,5 +1,6 @@
 import {
   createConnection,
+  DiagnosticSeverity,
   ProposedFeatures,
   TextDocumentSyncKind,
   type InitializeParams,
@@ -16,6 +17,7 @@ import {
   semanticTokenTypes,
 } from "./semantic-tokens";
 import { buildDocumentSymbols } from "./symbols";
+import { buildTypeScriptDiagnostics } from "./typescript-diagnostics";
 import { filePathFromUri } from "./uri";
 
 const validationDelayMs = 120;
@@ -160,13 +162,28 @@ function validateNow(document: TextDocument): CompileResult {
   clearPendingValidation(document.uri);
 
   const state = currentState(document);
+  const sourcePath = filePathFromUri(document.uri);
+  const diagnostics = hasCompilerErrors(state.result)
+    ? state.result.diagnostics
+    : [
+        ...state.result.diagnostics,
+        ...buildTypeScriptDiagnostics(document, sourcePath, state.result.compilation),
+      ];
+
   connection.sendDiagnostics({
     uri: document.uri,
     version: document.version,
-    diagnostics: state.result.diagnostics,
+    diagnostics,
   });
 
   return state.result;
+}
+
+function hasCompilerErrors(result: CompileResult): boolean {
+  return result.diagnostics.some((diagnostic) =>
+    diagnostic.severity === undefined ||
+    diagnostic.severity === DiagnosticSeverity.Error
+  );
 }
 
 function currentState(document: TextDocument): DocumentState {

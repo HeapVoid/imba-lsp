@@ -36,6 +36,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - TypeScript bridge reads project `tsconfig.json` and resolves imported `.imba` files as virtual compiled JS modules for cross-file hover/completion
 - cross-file TypeScript definitions from virtual compiled `.imba` modules are mapped back to source `.imba` ranges
 - cross-file TypeScript hover for imported `.imba` symbols prefers the original Imba declaration and suppresses weak `any` hovers
+- initial TypeScript diagnostics for the open `.imba` document, mapped back from compiled JS through native source spans
 
 The Tree-sitter grammar is not a complete Imba parser, and it should not be expanded as though it were the main semantic parser. The LSP calls `imba/compiler` directly and keeps the compiler result as document state.
 

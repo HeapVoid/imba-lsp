@@ -199,8 +199,15 @@ const validSource = [
   "let person = new Person",
   "person.greet",
   "let profile = new Profile",
-  "profile.na",
+  "profile.name",
   "profile.greet",
+  "",
+].join("\n");
+
+const typeErrorSource = [
+  "def check",
+  "\tlet value = 1",
+  "\tvalue.toUpperCase()",
   "",
 ].join("\n");
 
@@ -359,12 +366,6 @@ async function main(): Promise<void> {
     assert.match(importedProfileHover, /Imba class `Profile`/);
     assert.match(importedProfileHover, /export class Profile/);
 
-    const unknownMemberHover = await client.request("textDocument/hover", {
-      textDocument: { uri },
-      position: positionAfter(validSource, "profile.na"),
-    });
-    assert.equal(unknownMemberHover, null);
-
     const navigatorHover = hoverText(
       await client.request("textDocument/hover", {
         textDocument: { uri },
@@ -520,6 +521,34 @@ async function main(): Promise<void> {
       },
       contentChanges: [
         {
+          text: typeErrorSource,
+        },
+      ],
+    });
+
+    const typeDiagnostics = await client.waitForNotification(
+      "textDocument/publishDiagnostics",
+      (message) => {
+        const params = message.params as { uri?: string; diagnostics?: unknown[] } | undefined;
+        return params?.uri === uri &&
+          Array.isArray(params.diagnostics) &&
+          params.diagnostics.some((diagnostic) =>
+            diagnosticSource(diagnostic) === "typescript" &&
+            diagnosticMessage(diagnostic).includes("toUpperCase")
+          );
+      },
+    );
+    const typeDiagnostic = diagnosticByMessage(typeDiagnostics, "toUpperCase");
+    assert.equal(diagnosticSource(typeDiagnostic), "typescript");
+    assert.equal(diagnosticRangeText(typeErrorSource, typeDiagnostic), "toUpperCase");
+
+    client.notify("textDocument/didChange", {
+      textDocument: {
+        uri,
+        version: 4,
+      },
+      contentChanges: [
+        {
           text: typingSource,
         },
       ],
@@ -615,6 +644,30 @@ function hoverText(result: unknown): string {
   }
 
   return "";
+}
+
+function diagnosticByMessage(message: JsonRpcMessage, needle: string): Record<string, unknown> {
+  const diagnostics =
+    (message.params as { diagnostics?: unknown[] } | undefined)?.diagnostics ?? [];
+  const match = diagnostics.find((diagnostic) => diagnosticMessage(diagnostic).includes(needle));
+  assert.ok(match, `missing diagnostic containing ${JSON.stringify(needle)}`);
+  return match as Record<string, unknown>;
+}
+
+function diagnosticSource(diagnostic: unknown): string {
+  const source = (diagnostic as { source?: unknown }).source;
+  return typeof source === "string" ? source : "";
+}
+
+function diagnosticMessage(diagnostic: unknown): string {
+  const message = (diagnostic as { message?: unknown }).message;
+  return typeof message === "string" ? message : "";
+}
+
+function diagnosticRangeText(source: string, diagnostic: Record<string, unknown>): string {
+  const range = diagnostic.range as LspRange | undefined;
+  assert.ok(range, "missing diagnostic range");
+  return rangeText(source, range);
 }
 
 function semanticTokenTexts(source: string, data: number[]): Set<string> {

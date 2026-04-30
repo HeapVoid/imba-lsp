@@ -2,6 +2,7 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { ImbaCompilation, ImbaToken } from "./compiler";
 
 export const semanticTokenTypes = [
+  // Standard LSP token types.
   "namespace",
   "type",
   "class",
@@ -25,6 +26,15 @@ export const semanticTokenTypes = [
   "regexp",
   "operator",
   "decorator",
+
+  // Imba-specific token types styled by languages/imba/semantic_token_rules.json.
+  "tag",
+  "attribute",
+  "cssProperty",
+  "cssValue",
+  "boolean",
+  "constant",
+  "selfKeyword",
 ] as const;
 
 export const semanticTokenModifiers = [
@@ -84,6 +94,8 @@ const keywordTokens = new Set([
   "WHEN",
   "WHILE",
   "YIELD",
+  "POST_IF",
+  "FORIN",
 ]);
 
 const operatorTokens = new Set([
@@ -101,11 +113,31 @@ const operatorTokens = new Set([
   ">",
   "<=",
   ">=",
+  "?.",
+  "BANG",
+  "COMPOUND_ASSIGN",
   "COMPARE",
   "LOGIC",
   "MATH",
   "RELATION",
   "UNARY",
+]);
+
+const operatorValueTokens = new Set([
+  ".",
+  "..",
+  "?.",
+  ":",
+  "=",
+  "+=",
+  "-=",
+  "*=",
+  "/=",
+  "?=",
+  "||=",
+  "&&=",
+  "=?",
+  "!",
 ]);
 
 export function buildSemanticTokenData(
@@ -189,23 +221,38 @@ function encodeSemanticTokens(items: SemanticItem[]): number[] {
 
 function classify(type: string, previousType: string | null): string | null {
   if (keywordTokens.has(type)) return "keyword";
-  if (operatorTokens.has(type)) return "operator";
+  if (operatorTokens.has(type) || operatorValueTokens.has(type)) return "operator";
 
   if (type === "COMMENT" || type === "HERECOMMENT") return "comment";
   if (type === "STRING" || type === "NEOSTRING") return "string";
   if (type === "REGEX") return "regexp";
   if (type === "NUMBER" || type === "DIMENSION" || type === "PERCENTAGE") return "number";
   if (type === "DECORATOR") return "decorator";
+  if (type === "TRUE" || type === "FALSE") return "boolean";
+  if (type === "NULL") return "constant";
+  if (type === "SELF" || type === "THIS") return "selfKeyword";
 
-  if (type === "TAG_TYPE") return "class";
-  if (type === "CSSPROP") return "property";
-  if (type === "CSS_SEL") return "type";
+  if (type === "COLOR" || type === "CSSFUNCTION" || type === "CSSIDENTIFIER") return "cssValue";
+  if (type === "CSSPROP") return "cssProperty";
+  if (type === "CSS_SEL") return "tag";
+
+  if (type === "TAG_TYPE") {
+    return previousType === "TAG" ? "class" : "tag";
+  }
 
   if (type === "TAG_LITERAL") {
-    return previousType === "T@" ? "event" : "property";
+    return previousType === "T@" ? "event" : "attribute";
   }
 
   if (type === "IDENTIFIER" || type === "SYMBOL" || type === "SYMBOLID" || type === "ARGVAR") {
+    if (previousType === "DEF" || previousType === "GET" || previousType === "SET") {
+      return "method";
+    }
+
+    if (previousType === "CLASS") {
+      return "class";
+    }
+
     return "variable";
   }
 
@@ -215,13 +262,18 @@ function classify(type: string, previousType: string | null): string | null {
 function modifierMask(type: string, previousType: string | null): number {
   let mask = 0;
   const declaration = 1 << semanticTokenModifiers.indexOf("declaration");
+  const definition = 1 << semanticTokenModifiers.indexOf("definition");
 
   if (previousType === "DEF" || previousType === "GET" || previousType === "SET") {
-    mask |= declaration;
+    mask |= declaration | definition;
   }
 
   if (type === "TAG_TYPE" && previousType === "TAG") {
-    mask |= declaration;
+    mask |= declaration | definition;
+  }
+
+  if (type === "IDENTIFIER" && previousType === "CLASS") {
+    mask |= declaration | definition;
   }
 
   return mask;

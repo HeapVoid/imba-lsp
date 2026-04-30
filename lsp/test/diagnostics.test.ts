@@ -3,7 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { compileImba } from "../src/compiler";
-import { buildSemanticTokenData } from "../src/semantic-tokens";
+import { buildSemanticTokenData, semanticTokenTypes } from "../src/semantic-tokens";
 
 const fixturePath = path.resolve(__dirname, "../fixtures/sample.imba");
 
@@ -42,6 +42,17 @@ const invalidSource = ["def bad", "\treturn if", ""].join("\n");
   const tokens = buildSemanticTokenData(document, result.compilation);
   assert.ok(tokens.length > 0, "expected semantic tokens");
   assert.equal(tokens.length % 5, 0, "semantic tokens must be LSP encoded in groups of five");
+
+  const seenTokenTypes = new Set<string>();
+  for (let index = 0; index < tokens.length; index += 5) {
+    seenTokenTypes.add(semanticTokenTypes[tokens[index + 3]]);
+  }
+
+  assert.ok(seenTokenTypes.has("tag"), "expected tag semantic tokens");
+  assert.ok(seenTokenTypes.has("attribute"), "expected attribute semantic tokens");
+  assert.ok(seenTokenTypes.has("cssProperty"), "expected CSS property semantic tokens");
+  assert.ok(seenTokenTypes.has("cssValue"), "expected CSS value semantic tokens");
+  assert.ok(seenTokenTypes.has("method"), "expected method semantic tokens");
 }
 
 console.log("diagnostics.test ok");

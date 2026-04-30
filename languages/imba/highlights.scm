@@ -29,7 +29,6 @@
   "is"
   "isnt"
   "let"
-  "nil"
   "new"
   "not"
   "of"
@@ -59,6 +58,7 @@
 ] @boolean
 
 [
+  "nil"
   "null"
   "undefined"
 ] @constant.builtin
@@ -73,17 +73,46 @@
 (regex) @string.regex
 (number) @number
 
+(identifier) @variable
+
 (function_declaration
   name: (_) @function)
 
 (accessor_declaration
   name: (_) @function)
 
+(call_expression
+  function: (identifier) @function.call)
+
+(call_expression
+  function: (member_expression
+    property: (identifier) @function.method))
+
 (class_declaration
   name: (identifier) @type)
 
 (tag_declaration
   name: (identifier) @tag)
+
+(variable_declaration
+  name: (_) @variable)
+
+(field_declaration
+  name: (_) @property)
+
+(assignment
+  left: (identifier) @variable)
+
+(member_expression
+  property: (identifier) @property)
+
+(pair
+  key: (_) @property)
+
+(object_block_entry
+  key: (_) @property)
+
+(shorthand_property) @property
 
 (parameter
   name: (_) @variable.parameter)
@@ -95,7 +124,7 @@
   type: (_) @type)
 
 (private_identifier) @variable.special
-(identifier) @variable
+"self" @variable.special
 
 (tag_element
   name: (tag_name_open) @tag)
@@ -112,9 +141,16 @@
 (tag_attribute
   name: (attribute_name) @attribute)
 
+(tag_class_binding
+  name: (tag_class) @attribute)
+
 (event_attribute
   "@" @keyword
   name: (event_name) @function)
+
+(decorator
+  "@" @keyword
+  name: (identifier) @attribute)
 
 (inline_style) @embedded
 (style_content) @embedded

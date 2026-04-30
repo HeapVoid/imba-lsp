@@ -1,0 +1,40 @@
+[
+  {
+    "token_type": "tag",
+    "style": ["tag", "type"]
+  },
+  {
+    "token_type": "attribute",
+    "style": ["attribute", "property"]
+  },
+  {
+    "token_type": "cssProperty",
+    "style": ["property", "attribute"]
+  },
+  {
+    "token_type": "cssValue",
+    "style": ["string.special", "string"]
+  },
+  {
+    "token_type": "boolean",
+    "style": ["boolean", "constant.builtin", "constant"]
+  },
+  {
+    "token_type": "constant",
+    "style": ["constant.builtin", "constant"]
+  },
+  {
+    "token_type": "selfKeyword",
+    "style": ["variable.special", "variable"]
+  },
+  {
+    "token_type": "method",
+    "token_modifiers": ["declaration"],
+    "style": ["function.method", "function"]
+  },
+  {
+    "token_type": "class",
+    "token_modifiers": ["declaration"],
+    "style": ["type.class", "class", "type"]
+  }
+]

@@ -81,7 +81,7 @@ export async function buildWorkspaceCssTokens(
     tokens.push(...collectCssTokensFromSource(document.source, document.uri, document.sourcePath));
   }
 
-  return uniqueCssTokens(tokens);
+  return uniqueCssTokens(resolveCssTokenReferences(tokens));
 }
 
 export function collectCssTokensFromSource(
@@ -99,7 +99,7 @@ export function collectCssTokensFromSource(
     tokens.push(...collectLineTokens(text, line, uri, sourcePath));
   }
 
-  return uniqueCssTokens(tokens);
+  return uniqueCssTokens(resolveCssTokenReferences(tokens));
 }
 
 export function isStyleTokenFile(rootPath: string, file: string): boolean {
@@ -168,8 +168,8 @@ function collectLineTokens(
     const name = match[2] ?? "";
     const value = cleanValue(match[3] ?? "");
     const start = match.index + prefix.length;
-    const valueKind = inferValueKind(name, value);
-    const kind = tokenKind(name, valueKind);
+    const valueKind = inferValueKind(value);
+    const kind = tokenKind(name, value, valueKind);
     if (!kind) continue;
 
     tokens.push({
@@ -187,33 +187,32 @@ function collectLineTokens(
   return tokens;
 }
 
-function tokenKind(name: string, valueKind: CssTokenValueKind): CssTokenKind | null {
+function tokenKind(
+  name: string,
+  value: string,
+  valueKind: CssTokenValueKind,
+): CssTokenKind | null {
   if (name.startsWith("--")) return "css-variable";
   if (name.startsWith("$")) return "imba-variable";
-  if (name.startsWith("#") && valueKind === "color") return "imba-color-variable";
+  if (name.startsWith("#") && (valueKind === "color" || tokenReferenceName(value))) {
+    return "imba-color-variable";
+  }
 
   return null;
 }
 
-function inferValueKind(name: string, value: string): CssTokenValueKind {
-  const normalizedName = name.toLowerCase();
+function inferValueKind(value: string): CssTokenValueKind {
   const normalizedValue = value.toLowerCase();
 
-  if (name.startsWith("#")) {
-    return isColorishName(normalizedName) || isColorishValue(value) ? "color" : "unknown";
-  }
-
-  if (isFontFamilyName(normalizedName) || isFontFamilyValue(normalizedValue)) return "font-family";
-  if (isFontSizeName(normalizedName)) return "font-size";
-  if (isFontWeightName(normalizedName) || isFontWeightValue(normalizedValue)) return "font-weight";
-  if (isShadowName(normalizedName) || isShadowValue(normalizedValue)) return "shadow";
-  if (isRadiusName(normalizedName)) return "radius";
-  if (isDurationName(normalizedName) || isDurationValue(normalizedValue)) return "duration";
-  if (isEasingName(normalizedName) || isEasingValue(normalizedValue)) return "easing";
-  if (isDisplayName(normalizedName) || isDisplayValue(normalizedValue)) return "display";
-  if (isColorishValue(value) || isColorishName(normalizedName)) return "color";
-  if (isSpacingName(normalizedName)) return "spacing";
-  if (isLengthName(normalizedName) || isLengthValue(normalizedValue)) return "length";
+  if (tokenReferenceName(value)) return "unknown";
+  if (isFontFamilyValue(normalizedValue)) return "font-family";
+  if (isFontWeightValue(normalizedValue)) return "font-weight";
+  if (isShadowValue(normalizedValue)) return "shadow";
+  if (isDurationValue(normalizedValue)) return "duration";
+  if (isEasingValue(normalizedValue)) return "easing";
+  if (isDisplayValue(normalizedValue)) return "display";
+  if (isColorishValue(value)) return "color";
+  if (isLengthValue(normalizedValue)) return "length";
 
   return "unknown";
 }
@@ -230,32 +229,12 @@ function isColorishValue(value: string): boolean {
   return /^(?:#[0-9a-fA-F]{3,8}\b|hsl|hsla|rgb|rgba|oklch|color\(|light-dark\(|linear-gradient\(|radial-gradient\(|currentColor\b|transparent\b|clear\b|black\b|white\b|(?:warm|warmer|gray|cool|cooler|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|zinc|stone|neutral)\d)/.test(value);
 }
 
-function isColorishName(name: string): boolean {
-  return /(?:^|[-_#])(?:accent|base|bg|black|blue|border|brand|color|colour|cool|cyan|danger|emerald|error|fill|font\d*|foreground|fuchsia|gray|green|grey|indigo|lime|muted|neutral|orange|pink|primary|purple|red|rose|secondary|sky|slate|spot|stone|stroke|surface|teal|text|violet|warm|warning|white|yellow|zinc)(?:$|[-_\d])/.test(name);
-}
-
-function isFontFamilyName(name: string): boolean {
-  return /(?:font-family|font-face|typeface|font-main|font-sans|font-serif|font-mono|family)/.test(name);
-}
-
 function isFontFamilyValue(value: string): boolean {
   return /(?:system-ui|sans-serif|serif|monospace|menlo|inter|roboto|arial|georgia|mono|sans\b)/.test(value);
 }
 
-function isFontSizeName(name: string): boolean {
-  return /(?:font-size|text-size|type-size|(?:^|[-_])fs(?:$|[-_])|text-(?:xs|sm|md|lg|xl|\d+xl))/.test(name);
-}
-
-function isFontWeightName(name: string): boolean {
-  return /(?:font-weight|text-weight|weight|(?:^|[-_])fw(?:$|[-_]))/.test(name);
-}
-
 function isFontWeightValue(value: string): boolean {
   return /^(?:normal|bold|lighter|bolder|[1-9]00)$/.test(value);
-}
-
-function isShadowName(name: string): boolean {
-  return /(?:shadow|box-shadow|bxs)/.test(name);
 }
 
 function isShadowValue(value: string): boolean {
@@ -263,44 +242,64 @@ function isShadowValue(value: string): boolean {
     /(?:black|white|gray|rgba|hsla|#)/.test(value);
 }
 
-function isRadiusName(name: string): boolean {
-  return /(?:radius|rounded|rounding|(?:^|[-_])rd(?:$|[-_]))/.test(name);
-}
-
-function isDurationName(name: string): boolean {
-  return /(?:duration|delay|time|speed)/.test(name);
-}
-
 function isDurationValue(value: string): boolean {
   return /^\d+(?:ms|s)$/.test(value);
-}
-
-function isEasingName(name: string): boolean {
-  return /(?:easing|ease|curve|timing)/.test(name);
 }
 
 function isEasingValue(value: string): boolean {
   return /^(?:linear|ease|ease-in|ease-out|ease-in-out|step-start|step-end|cubic-bezier\()/.test(value);
 }
 
-function isDisplayName(name: string): boolean {
-  return /(?:display|layout|flow)/.test(name);
-}
-
 function isDisplayValue(value: string): boolean {
   return /^(?:none|block|inline|inline-block|flex|inline-flex|grid|inline-grid|contents|vflex|hflex|box|vbox|hbox|vcc|hcc|vtl|hcl|vbr|hbr)$/.test(value);
 }
 
-function isSpacingName(name: string): boolean {
-  return /(?:space|spacing|gap|gutter|padding|margin|inset|stack|rhythm|(?:^|[-_])(?:p|px|py|pt|pr|pb|pl|m|mx|my|mt|mr|mb|ml|g)(?:$|[-_]))/.test(name);
-}
-
-function isLengthName(name: string): boolean {
-  return /(?:width|height|size|length|offset|top|right|bottom|left|(?:^|[-_])(?:w|h|s|miw|mih|maw|mah)(?:$|[-_]))/.test(name);
-}
-
 function isLengthValue(value: string): boolean {
   return /^(?:0|auto|fit-content|min-content|max-content|calc\(|clamp\(|min\(|max\(|-?\d+(?:\.\d+)?(?:px|rem|em|ch|vw|vh|vmin|vmax|%|elw|elh)?)$/.test(value);
+}
+
+function resolveCssTokenReferences(tokens: CssToken[]): CssToken[] {
+  const resolved = tokens.map((token) => ({ ...token }));
+  const byName = new Map<string, CssToken>();
+  for (const token of resolved) {
+    const existing = byName.get(token.name);
+    if (!existing || (existing.valueKind === "unknown" && token.valueKind !== "unknown")) {
+      byName.set(token.name, token);
+    }
+  }
+
+  for (let pass = 0; pass < resolved.length; pass++) {
+    let changed = false;
+
+    for (const token of resolved) {
+      if (token.valueKind !== "unknown") continue;
+
+      const referenceName = tokenReferenceName(token.value);
+      if (!referenceName) continue;
+
+      const reference = byName.get(referenceName);
+      if (!reference || reference.valueKind === "unknown") continue;
+
+      token.valueKind = reference.valueKind;
+      changed = true;
+    }
+
+    if (!changed) break;
+  }
+
+  return resolved;
+}
+
+function tokenReferenceName(value: string): string | null {
+  const trimmed = value.trim();
+  const cssVariable = trimmed.match(/^var\(\s*(--[A-Za-z_][\w-]*)\s*\)$/);
+  if (cssVariable) return cssVariable[1];
+  if (/^\$[A-Za-z_][\w-]*$/.test(trimmed)) return trimmed;
+  if (/^#[A-Za-z_][\w-]*$/.test(trimmed) && !/^#[0-9a-fA-F]{3,8}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return null;
 }
 
 function uniqueCssTokens(tokens: CssToken[]): CssToken[] {

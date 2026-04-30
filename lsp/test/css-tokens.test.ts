@@ -30,10 +30,15 @@ async function main(): Promise<void> {
         "global css",
         "\t:root",
         "\t\t$surface: warm1",
+        "\t\t$surface-alias: $surface",
+        "\t\t$surface-name-only: tokenish",
         "\t\t$gap: 8px",
         "\t\t$font-main: sans",
         "\t\t$shadow-card: 0 4px 12px black/20",
+        "\t\t$layout: flex",
+        "\t\t$layout-alias: $layout",
         "\t\t#brand: blue6",
+        "\t\t#brand-alias: #brand",
         "\t\t#nav:hover",
         "\t\t\tc: blue6",
         "",
@@ -44,6 +49,7 @@ async function main(): Promise<void> {
       [
         ":root {",
         "  --text-primary: #111;",
+        "  --text-alias: var(--text-primary);",
         "}",
         "",
       ].join("\n"),
@@ -57,18 +63,30 @@ async function main(): Promise<void> {
     const tokens = await buildWorkspaceCssTokens(root);
     const labels = new Set(tokens.map((token) => token.insertText));
     assert.ok(labels.has("$surface"));
+    assert.ok(labels.has("$surface-alias"));
+    assert.ok(labels.has("$surface-name-only"));
     assert.ok(labels.has("$gap"));
     assert.ok(labels.has("$font-main"));
     assert.ok(labels.has("$shadow-card"));
+    assert.ok(labels.has("$layout"));
+    assert.ok(labels.has("$layout-alias"));
     assert.ok(labels.has("#brand"));
+    assert.ok(labels.has("#brand-alias"));
     assert.ok(labels.has("var(--text-primary)"));
+    assert.ok(labels.has("var(--text-alias)"));
     assert.equal(labels.has("var(--ignored)"), false);
     assert.equal(labels.has("#nav"), false);
     assert.equal(tokenKind(tokens, "$surface"), "color");
-    assert.equal(tokenKind(tokens, "$gap"), "spacing");
+    assert.equal(tokenKind(tokens, "$surface-alias"), "color");
+    assert.equal(tokenKind(tokens, "$surface-name-only"), "unknown");
+    assert.equal(tokenKind(tokens, "$gap"), "length");
     assert.equal(tokenKind(tokens, "$font-main"), "font-family");
     assert.equal(tokenKind(tokens, "$shadow-card"), "shadow");
+    assert.equal(tokenKind(tokens, "$layout"), "display");
+    assert.equal(tokenKind(tokens, "$layout-alias"), "display");
+    assert.equal(tokenKind(tokens, "#brand-alias"), "color");
     assert.equal(tokenKind(tokens, "var(--text-primary)"), "color");
+    assert.equal(tokenKind(tokens, "var(--text-alias)"), "color");
 
     const openTokens = await buildWorkspaceCssTokens(root, [
       {

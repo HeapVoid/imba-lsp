@@ -26,12 +26,17 @@ const workspaceTokens = collectCssTokensFromSource(
   [
     "global css",
     "\t$surface: warm1",
+    "\t$surface-alias: $surface",
+    "\t$surface-name-only: tokenish",
     "\t$gap: 8px",
     "\t$layout: flex",
+    "\t$layout-alias: $layout",
     "\t$font-main: sans",
     "\t$shadow-card: 0 4px 12px black/20",
     "\t#brand: blue6",
+    "\t#brand-alias: #brand",
     "\t--text-primary: gray9",
+    "\t--text-alias: var(--text-primary)",
     "",
   ].join("\n"),
   "file:///theme.imba",
@@ -59,8 +64,12 @@ assert.ok(colorValueCompletion.has("gray9"));
 assert.ok(colorValueCompletion.has("blue6/40"));
 assert.ok(colorValueCompletion.has("$base9"));
 assert.ok(colorValueCompletion.has("$surface"));
+assert.ok(colorValueCompletion.has("$surface-alias"));
 assert.ok(colorValueCompletion.has("#brand"));
+assert.ok(colorValueCompletion.has("#brand-alias"));
 assert.ok(colorValueCompletion.has("var(--text-primary)"));
+assert.ok(colorValueCompletion.has("var(--text-alias)"));
+assert.equal(colorValueCompletion.has("$surface-name-only"), false);
 assert.equal(colorValueCompletion.has("$gap"), false);
 assert.equal(colorValueCompletion.has("$layout"), false);
 assert.equal(colorValueCompletion.has("$font-main"), false);
@@ -74,7 +83,9 @@ assert.ok(displayValueCompletion.has("grid"));
 assert.ok(displayValueCompletion.has("vflex"));
 assert.ok(displayValueCompletion.has("hcc"));
 assert.ok(displayValueCompletion.has("$layout"));
+assert.ok(displayValueCompletion.has("$layout-alias"));
 assert.equal(displayValueCompletion.has("$surface"), false);
+assert.equal(displayValueCompletion.has("$surface-name-only"), false);
 assert.equal(displayValueCompletion.has("#brand"), false);
 
 const fontValueCompletion = completionLabels(positionBefore("sans"));

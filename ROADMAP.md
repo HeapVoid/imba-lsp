@@ -22,8 +22,8 @@ Goal: base the real language features on Imba's own parser/compiler instead of a
 - [x] Verify the compiler pipeline: lexer, rewriter, parser, AST, compiler result.
 - [x] Verify that `imba/compiler` exposes `tokenize`, `rewrite`, `parse`, and `compile`.
 - [x] Verify that compiler diagnostics include source ranges.
-- [ ] Probe compiler output on a corpus of real local `.imba` files.
-- [ ] Document the compiler API surface that the LSP will depend on.
+- [x] Probe compiler output on a corpus of real local `.imba` files.
+- [x] Document the compiler API surface that the LSP will depend on.
 
 ## Phase 3: `imba-lsp` MVP
 
@@ -40,7 +40,10 @@ Goal: a small Node/TypeScript LSP that calls native `imba/compiler` and makes Ze
 - [x] Implement initial `textDocument/semanticTokens/full` from native compiler tokens.
 - [ ] Upgrade semantic tokens to use richer Imba program symbols where available.
 - [x] Add Zed language-server registration.
-- [ ] Verify diagnostics and semantic tokens inside a live Zed dev extension.
+- [x] Verify diagnostics and LSP startup inside a live Zed dev extension.
+- [ ] Verify semantic token styling inside a live Zed dev extension with Zed semantic tokens enabled.
+- [x] Add a corpus probe for compiler diagnostics, document symbols, and semantic-token adapter failures.
+- [ ] Add a release/install path for `imba-lsp` instead of relying on the dev-extension local `lsp/dist` path.
 
 ## Phase 4: TypeScript-Aware Features
 

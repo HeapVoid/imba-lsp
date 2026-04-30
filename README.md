@@ -13,7 +13,7 @@ The existing VS Code extension is used only as a behavioral reference. It does n
 
 ## Current Status
 
-This repository currently contains a Zed highlighting MVP:
+This repository currently contains a working Zed dev-extension MVP:
 
 - comments: `# ...` and `### ... ###`
 - strings: single, double, and backtick strings
@@ -23,8 +23,12 @@ This repository currently contains a Zed highlighting MVP:
 - `def`, `get`, `set`, `class`, `tag`, `css`, import/export, control-flow statements
 - basic Imba tags such as `<self>`, `<div.card>`, attributes, events, and inline style brackets
 - initial Zed queries for highlights, brackets, indents, outline, and CSS-block injection
+- Rust Zed adapter that launches `imba-lsp` through Zed's managed Node runtime
+- compiler-backed diagnostics from native `imba/compiler`
+- document symbols from native `imba/program` outline data, with a local fallback scanner
+- initial semantic tokens from native compiler tokens
 
-This is not a complete Imba parser, and it should not be expanded as though it were the main semantic parser. The next phase is a Node/TypeScript LSP that calls `imba/compiler` directly and keeps the compiler result as document state.
+The Tree-sitter grammar is not a complete Imba parser, and it should not be expanded as though it were the main semantic parser. The LSP calls `imba/compiler` directly and keeps the compiler result as document state.
 
 ## Development
 
@@ -73,6 +77,14 @@ npm run lsp:test
 
 The LSP tests include a protocol-level stdio smoke test. It starts the built server, sends `initialize`, `didOpen`, `didChange`, `textDocument/documentSymbol`, and `textDocument/semanticTokens/full`, and verifies diagnostics/symbols/tokens without requiring Zed.
 
+Probe the LSP adapters against real `.imba` files:
+
+```sh
+npm run lsp:probe -- /path/to/imba/project
+```
+
+The probe compiles every `.imba` file under the target path, builds semantic tokens, builds document symbols, reports diagnostics, and fails only on runtime failures. Add `--fail-on-diagnostics` when the target is expected to be clean.
+
 Run the language server over stdio:
 
 ```sh
@@ -103,6 +115,8 @@ npm run lsp:build
 ```
 
 The adapter launches Zed's managed Node binary with `lsp/dist/src/server.js --stdio`.
+
+For local dev-extension testing, Zed must be able to find `rustc` through the GUI process `PATH`. Installing Rust via `rustup` is required for dev extensions; published extensions are precompiled by Zed's extension packaging flow.
 
 ## References
 

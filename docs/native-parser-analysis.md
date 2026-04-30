@@ -45,6 +45,36 @@ The public compiler entrypoint already exposes what the LSP needs:
 
 Syntax errors can be consumed without crashing the server: bad input returns diagnostics with source ranges from `imba-parser`.
 
+## LSP API Surface In Use
+
+The current LSP MVP depends on a deliberately small native API surface:
+
+- `imba/compiler.compile(source, { sourcePath })` for diagnostics and cached compiler state.
+- `compilation.diagnostics` for `textDocument/publishDiagnostics`.
+- `compilation.tokens` for initial `textDocument/semanticTokens/full`.
+- `compilation.ast`, `compilation.js`, `compilation.css`, and `compilation.locs.spans` are retained in document state for later TypeScript-aware features.
+- `imba/program.ImbaDocument#getOutline()` for `textDocument/documentSymbol`, with a local indentation scanner as fallback.
+
+Compiler diagnostics sometimes arrive as zero-width ranges. The LSP normalizes those to at least one character so Zed can show a visible underline.
+
+## Corpus Probe
+
+The repository includes an LSP probe command:
+
+```sh
+npm run lsp:probe -- /path/to/imba/project
+```
+
+It compiles every `.imba` file under the target path, then exercises diagnostics, semantic tokens, and document symbols without requiring Zed. Runtime adapter failures make the command fail. Diagnostics are reported but do not fail the command unless `--fail-on-diagnostics` is passed.
+
+Current local probe result for `/Users/fedor/Projects/questfall/questfall-application`:
+
+- files: 28
+- diagnostics: 0
+- failures: 0
+- compiler resolution: workspace-local `imba/compiler`
+- total probe time: about 350ms on this machine
+
 ## Why Not Full Tree-sitter First
 
 Zed requires Tree-sitter for native highlighting, bracket matching, indents, outline queries, and injections. That does not mean Tree-sitter should become the authoritative Imba parser.

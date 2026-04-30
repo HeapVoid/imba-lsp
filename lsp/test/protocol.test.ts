@@ -185,6 +185,7 @@ const validSource = [
   "\t\tdocument.body.style.overflow = 'hidden'",
   "\t\tnavigator.userAgent",
   "\t\twindow.location.href",
+  "\t\tself.rendered?",
   "\t\t<div.card @click=save> \"Hi\"",
   "\tcss .card",
   "\t\tbgc:red5",
@@ -493,6 +494,19 @@ async function main(): Promise<void> {
     assert.ok(windowCompletion.has("navigator"));
     assert.ok(windowCompletion.has("location"));
     assert.ok(windowCompletion.has("localStorage"));
+
+    const selfCompletion = completionLabels(
+      await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: positionAfter(validSource, "self."),
+      }),
+    );
+    assert.ok(selfCompletion.has("rendered?"));
+    assert.equal(selfCompletion.has("_ns_"), false);
+    assert.equal(selfCompletion.has("__slots"), false);
+    assert.equal(selfCompletion.has("css$var"), false);
+    assert.equal(selfCompletion.has("flagSelf$"), false);
+    assert.equal(selfCompletion.has("on$"), false);
 
     const classMemberCompletion = completionLabels(
       await client.request("textDocument/completion", {

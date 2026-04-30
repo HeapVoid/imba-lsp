@@ -34,6 +34,7 @@ export function buildTypeScriptCompletionItems(
     document.positionAt(context.start),
     document.positionAt(context.end),
   );
+  const typedPrefix = source.slice(context.start, offset);
   const syntheticSource = [
     source.slice(0, context.start),
     marker,
@@ -47,6 +48,7 @@ export function buildTypeScriptCompletionItems(
     position,
     syntheticPath,
     replacementRange,
+    typedPrefix,
     compilation,
   );
   if (mappedItems.length > 0) return mappedItems;
@@ -60,11 +62,12 @@ export function buildTypeScriptCompletionItems(
     ? buildLanguageServiceCompletionItems(`${syntheticPath}.js`, js, {
       defaultRange: replacementRange,
       generatedOffset: js.indexOf(marker),
+      typedPrefix,
     })
     : [];
   if (compiledItems.length > 0) return compiledItems;
 
-  return buildDirectCompletionItems(source, offset, syntheticPath, replacementRange);
+  return buildDirectCompletionItems(source, offset, syntheticPath, replacementRange, typedPrefix);
 }
 
 function buildDirectCompletionItems(
@@ -72,6 +75,7 @@ function buildDirectCompletionItems(
   offset: number,
   syntheticPath: string,
   replacementRange: Range,
+  typedPrefix: string,
 ): CompletionItem[] {
   const before = source.slice(0, offset);
   const match = before.match(memberExpressionPattern);
@@ -82,6 +86,7 @@ function buildDirectCompletionItems(
   return buildLanguageServiceCompletionItems(`${syntheticPath}.fallback.js`, js, {
     defaultRange: replacementRange,
     generatedOffset: js.indexOf(marker),
+    typedPrefix,
   });
 }
 
@@ -91,6 +96,7 @@ interface LanguageServiceCompletionOptions {
   generatedOffset: number;
   mappedCompilation?: ImbaCompilation;
   source?: string;
+  typedPrefix: string;
 }
 
 function buildMappedCompletionItems(
@@ -99,6 +105,7 @@ function buildMappedCompletionItems(
   position: Position,
   syntheticPath: string,
   replacementRange: Range,
+  typedPrefix: string,
   compilation: ImbaCompilation | undefined,
 ): CompletionItem[] {
   const currentCompilation = compilation ?? compileImba(source, syntheticPath, {
@@ -118,6 +125,7 @@ function buildMappedCompletionItems(
     generatedOffset: mapping.offset + 1,
     mappedCompilation: currentCompilation,
     source,
+    typedPrefix,
   });
 }
 
@@ -137,7 +145,7 @@ function buildLanguageServiceCompletionItems(
   if (!completions?.isMemberCompletion) return [];
 
   return completions.entries
-    .filter((entry) => isUsefulEntry(entry))
+    .filter((entry) => isUsefulEntry(entry, options.typedPrefix))
     .map((entry) => {
       const label = toImbaIdentifier(entry.name);
       const newText = toImbaIdentifier(entry.insertText ?? entry.name);
@@ -200,12 +208,21 @@ function memberContext(source: string, offset: number): { start: number; end: nu
   return { start, end };
 }
 
-function isUsefulEntry(entry: ts.CompletionEntry): boolean {
+function isUsefulEntry(entry: ts.CompletionEntry, typedPrefix: string): boolean {
   if (entry.kind === ts.ScriptElementKind.warning) return false;
   if (entry.name === marker) return false;
-  if (entry.name.startsWith("__")) return false;
   if (isGeneratedInternalIdentifier(entry.name)) return false;
+  if (isImbaRuntimeInternalCompletion(entry.name, typedPrefix)) return false;
   return true;
+}
+
+function isImbaRuntimeInternalCompletion(name: string, typedPrefix: string): boolean {
+  if (isExplicitInternalPrefix(typedPrefix)) return false;
+  return /^_/.test(name) || name.includes("$");
+}
+
+function isExplicitInternalPrefix(typedPrefix: string): boolean {
+  return /[_$]/.test(typedPrefix);
 }
 
 function completionKind(kind: string): CompletionItemKind {

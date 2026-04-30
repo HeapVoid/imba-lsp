@@ -30,6 +30,7 @@ This repository currently contains a working Zed dev-extension MVP:
 - initial non-TypeScript completions for keywords, document symbols, tags, events, CSS shortcuts, and heuristic member names
 - initial TypeScript-backed member completions for compiled Imba expressions such as DOM APIs and local class instances
 - TypeScript-backed member completions decode compiler-mangled Imba identifiers such as `readyΦ` and `fooΞbar` back to `ready?` and `foo-bar`
+- TypeScript-backed member completions hide generated Imba runtime internals unless an internal-looking prefix is explicitly typed
 - initial local hover and go-to-definition for Imba declarations, fields, and typed local class members
 - initial TypeScript-backed hover and go-to-definition for JS-compatible browser/global expressions
 - TypeScript-backed hover and go-to-definition understand compiler-mangled Imba member names such as `ready?` and `foo-bar`

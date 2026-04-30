@@ -1,6 +1,6 @@
 # Parser smoke sample
 
-import { db } from './db.imba'
+# class { db } from './db.imba'
 
 tag app-root
 	title = "Imba in Zed"
@@ -15,6 +15,6 @@ tag app-root
 		console.log("save")
 
 	<self>
-		<div.card @click=save [d:flex g:8px]>
+		<div.card @click=(do save!) [d:flex g:8px]>
 			<span.title> title
 				<span> 'Hello world'

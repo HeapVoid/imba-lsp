@@ -282,7 +282,7 @@ function imbaRuntimeAugmentationSource(imbaTypingsPath: string): string {
     "    _ns_?: string;",
     "    __slots?: Record<string, any>;",
     "    css$var: any;",
-    "    flagSelf$(value?: any): any;",
+    "    flagSelf$(value?: any, flags?: any): any;",
     "    readonly globalThis: typeof globalThis;",
     "    readonly history: History;",
     "    readonly location: Location;",
@@ -294,18 +294,20 @@ function imbaRuntimeAugmentationSource(imbaTypingsPath: string): string {
     "",
     "declare module \"imba\" {",
     "  export import Component = imba.Component;",
+    "  export function isa$(value: any, type: any): boolean;",
     "  export function iterable$<T>(value: Iterable<T> | ArrayLike<T>): T[];",
     "  export function iterable$(value: any): any[];",
     ...imbaModuleAnyExports
-      .filter((name) => name !== "Component" && name !== "iterable$")
+      .filter((name) => name !== "Component" && name !== "isa$" && name !== "iterable$")
       .map((name) => `  export const ${name}: any;`),
     "}",
     "",
     "declare module \"imba/runtime\" {",
+    "  export function isa$(value: any, type: any): boolean;",
     "  export function iterable$<T>(value: Iterable<T> | ArrayLike<T>): T[];",
     "  export function iterable$(value: any): any[];",
     ...imbaRuntimeAnyExports
-      .filter((name) => name !== "iterable$")
+      .filter((name) => name !== "isa$" && name !== "iterable$")
       .map((name) => `  export const ${name}: any;`),
     "}",
     "",

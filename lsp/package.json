@@ -1,17 +1,41 @@
 {
   "name": "imba-lsp",
   "version": "0.0.1",
-  "private": true,
   "description": "Language server for Imba, backed by the native Imba compiler",
+  "license": "MIT",
   "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HeapVoid/imba-lsp.git",
+    "directory": "lsp"
+  },
+  "bugs": {
+    "url": "https://github.com/HeapVoid/imba-lsp/issues"
+  },
+  "homepage": "https://github.com/HeapVoid/imba-lsp#readme",
+  "keywords": [
+    "imba",
+    "lsp",
+    "language-server",
+    "zed"
+  ],
+  "files": [
+    "dist/src/**/*.js",
+    "README.md"
+  ],
   "bin": {
-    "imba-lsp": "./dist/src/server.js"
+    "imba-lsp": "dist/src/server.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "probe": "npm run build && node dist/src/probe.js",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm test",
     "start": "node dist/src/server.js --stdio",
     "test": "npm run build && node dist/test/diagnostics.test.js && node dist/test/source-map.test.js && node dist/test/typescript-diagnostics.test.js && node dist/test/project-diagnostics.test.js && node dist/test/css-tokens.test.js && node dist/test/imba-css.test.js && node dist/test/probe.test.js && node dist/test/protocol.test.js && node dist/src/probe.js test/fixtures --fail-on-diagnostics"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "imba": "2.0.0-alpha.247",

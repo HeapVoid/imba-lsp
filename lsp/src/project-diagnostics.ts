@@ -4,12 +4,30 @@ import { pathToFileURL } from "node:url";
 import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { compileImba, type CompileResult } from "./compiler";
+import {
+  buildProjectTypeScriptDiagnostics,
+  type ProjectTypeScriptDiagnosticSource,
+} from "./project-typescript-diagnostics";
 import { buildTypeScriptDiagnostics } from "./typescript-diagnostics";
 
 export interface ProjectDiagnosticFile {
   diagnostics: Diagnostic[];
   sourcePath: string;
   uri: string;
+}
+
+export interface ProjectDiagnosticOptions {
+  includeTypeScript?: boolean;
+}
+
+interface ProjectDiagnosticRecord extends ProjectDiagnosticFile {
+  document: TextDocument;
+  result: CompileResult;
+  source: string;
+}
+
+interface ProjectDiagnosticRecordOptions extends ProjectDiagnosticOptions {
+  runSingleFileTypeScript?: boolean;
 }
 
 const ignoredDirectories = new Set([
@@ -26,21 +44,47 @@ const ignoredDirectories = new Set([
 export async function buildProjectDiagnostics(
   rootPath: string,
   openUris: Set<string>,
+  options: ProjectDiagnosticOptions = {},
 ): Promise<ProjectDiagnosticFile[]> {
   const files = await collectProjectImbaFiles(rootPath);
-  const results: ProjectDiagnosticFile[] = [];
+  const records: ProjectDiagnosticRecord[] = [];
 
   for (const file of files) {
     const uri = pathToFileURL(file).toString();
     if (openUris.has(uri)) continue;
 
-    const result = await buildProjectDiagnosticFile(file);
-    if (result) {
-      results.push(result);
+    const record = await buildProjectDiagnosticRecord(file, {
+      ...options,
+      runSingleFileTypeScript: false,
+    });
+    if (record) {
+      records.push(record);
     }
   }
 
-  return results;
+  if (options.includeTypeScript) {
+    const typeScriptDiagnostics = buildProjectTypeScriptDiagnostics(
+      rootPath,
+      records
+        .filter((record) => record.result.compilation?.js && !hasCompilerErrors(record.result))
+        .map((record): ProjectTypeScriptDiagnosticSource => ({
+          compilation: record.result.compilation!,
+          document: record.document,
+          source: record.source,
+          sourcePath: record.sourcePath,
+        })),
+    );
+
+    for (const record of records) {
+      record.diagnostics.push(...(typeScriptDiagnostics.get(record.sourcePath) ?? []));
+    }
+  }
+
+  return records.map(({ diagnostics, sourcePath, uri }) => ({
+    diagnostics,
+    sourcePath,
+    uri,
+  }));
 }
 
 export async function collectProjectImbaFiles(rootPath: string): Promise<string[]> {
@@ -51,15 +95,33 @@ export async function collectProjectImbaFiles(rootPath: string): Promise<string[
 
 export async function buildProjectDiagnosticFile(
   file: string,
+  options: ProjectDiagnosticOptions = {},
 ): Promise<ProjectDiagnosticFile | null> {
+  const record = await buildProjectDiagnosticRecord(file, options);
+  if (!record) return null;
+
+  return {
+    diagnostics: record.diagnostics,
+    sourcePath: record.sourcePath,
+    uri: record.uri,
+  };
+}
+
+async function buildProjectDiagnosticRecord(
+  file: string,
+  options: ProjectDiagnosticRecordOptions = {},
+): Promise<ProjectDiagnosticRecord | null> {
   try {
     const uri = pathToFileURL(file).toString();
     const source = await fs.readFile(file, "utf8");
     const document = TextDocument.create(uri, "imba", 0, source);
     const result = compileImba(source, file, {
-      sourcemap: true,
+      sourcemap: options.includeTypeScript === true,
     });
-    const typeScriptDiagnostics = hasCompilerErrors(result)
+    const typeScriptDiagnostics =
+      !options.includeTypeScript ||
+      options.runSingleFileTypeScript === false ||
+      hasCompilerErrors(result)
       ? []
       : buildTypeScriptDiagnostics(document, file, result.compilation);
 
@@ -68,6 +130,9 @@ export async function buildProjectDiagnosticFile(
         ...result.diagnostics,
         ...typeScriptDiagnostics,
       ],
+      document,
+      result,
+      source,
       sourcePath: file,
       uri,
     };

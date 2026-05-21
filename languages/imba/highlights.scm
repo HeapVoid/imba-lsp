@@ -72,12 +72,12 @@
 "self" @variable.special
 
 (tag_element
-  name: (tag_name_open) @tag)
+  name: (tag_name_open) @punctuation.bracket)
 
+(tag_class_open) @punctuation.bracket
+(tag_id_open) @punctuation.bracket
+(tag_reference_open) @punctuation.bracket
 (tag_close) @punctuation.bracket
-(tag_class_open) @attribute
-(tag_id_open) @attribute
-(tag_reference_open) @variable.special
 (tag_class_binding
   name: (tag_class) @attribute)
 (tag_class) @attribute

@@ -49,6 +49,11 @@ npm run lsp:build
 npm run zed:check-extension
 ```
 
+The Rust adapter resolves the LSP in two phases:
+
+1. Prefer a local `lsp/dist/src/server.js` from the dev extension checkout, so local Zed testing keeps using the code in this repository after `npm run lsp:build`.
+2. If no local build exists, install `imba-lsp` from npm through Zed's `npm_install_package` API and run `node_modules/imba-lsp/dist/src/server.js`.
+
 Published Zed extensions are precompiled by Zed's packaging flow. End users should not need Rust, `tree-sitter-cli`, or the local dev toolchain just to install the extension. Rust via `rustup` is only required for local dev extension compilation.
 
 ## Zed Config Regexes
@@ -161,19 +166,37 @@ TypeScript-aware features use compiled JS plus source mapping:
 
 - Imba source is compiled to virtual JS.
 - Imported `.imba` files are compiled as virtual JS modules.
+- Project `tsconfig.json` and `jsconfig.json` files are both honored; this matters for JS-runtime projects such as PocketBase hooks that declare globals in local `.d.ts` files.
+- Imports that point at generated `.js` files are resolved back to sibling `.imba` sources when possible, for example `./helper.js` -> `./helper.imba`.
+- Project config root files contribute ambient declaration files (`.d.ts`, `.d.mts`, `.d.cts`) to the Imba TypeScript service. Plain `.js` files are loaded through actual imports instead of as global root files, so test/runtime stubs such as `globalThis.$security = ...` do not override declaration-file APIs for unrelated Imba diagnostics.
 - TypeScript completions, hover, definitions, references, rename, and diagnostics are mapped back through native source spans.
 
 Compiler-mangled Imba names must be decoded for user-facing results, for example `readyΦ` -> `ready?` and `fooΞbar` -> `foo-bar`.
+
+Runtime augmentation must track compiler-emitted helper signatures, not only public APIs. For example newer Imba compilers emit `flagSelf$(className, flags)` while older typings expose only one argument; if our augmentation is narrower than the generated JS, TypeScript diagnostics can map back to unrelated-looking source ranges such as CSS selectors or tag lines.
+
+Mapped diagnostics follow an Imba-native policy: TypeScript diagnostics are tooling signal, not a strict Imba type checker. TypeScript `2339` property-existence errors are suppressed for object-like receivers because Imba/JavaScript code often probes unknown object keys and expects `undefined`. Clear primitive receiver mistakes such as `number.slot` stay errors.
+
+Mapped diagnostics suppress TypeScript nullish-access errors when the mapped source uses Imba's null-safe `..` access. `item..id` is equivalent to JavaScript optional chaining, even if the compiled JS/source-map combination still lets TypeScript report a `possibly null` diagnostic on the receiver. Plain `item.id` keeps the diagnostic.
+
+Mapped diagnostics also suppress TypeScript argument-type noise caused by untyped Imba parameters with default values. A default value such as `fallback = ''` is not a type annotation in Imba; it should not make all callers pass strings if the function body only returns or generically forwards the fallback. The filter still keeps diagnostics when the body uses type-specific APIs such as `value.toUpperCase()`.
+
+Mapped diagnostics also suppress TypeScript `HeadersInit` index-signature noise for `fetch(..., { headers })` when the generated JS builds a local headers object from string-valued properties. TypeScript accepts inline header literals but can reject a local object that starts as `{}` and is later mutated with `headers.authorization = '...'`. The filter is limited to global `fetch`/`window.fetch` calls and keeps diagnostics when a header value is not string-like.
+
+Mapped diagnostics also suppress object-to-object assignability noise for parameters whose default value is an ambient global such as `$app`. TypeScript infers those JS parameters too narrowly from the default value, but Imba code commonly passes compatible transaction/context objects into the same slot. The filter checks direct property usage and inspectable local pass-through helpers; untyped dynamic pass-through calls are allowed, while primitive arguments and helpers that use ambient-global-only APIs remain diagnostics.
 
 Do not assume `vtsls + typescript-imba-plugin` will provide VS Code-like behavior automatically. The VS Code extension uses its own bridge, and the TypeScript plugin's standard completion entrypoint was observed returning `null`.
 
 ## Project-Wide Diagnostics
 
-The LSP publishes diagnostics for open buffers and scans unopened `.imba` files in the workspace.
+The LSP publishes full compiler + TypeScript diagnostics for open buffers and unopened `.imba` files in the workspace.
 
 Important details:
 
 - Skip open buffers during project-wide scans so open-document diagnostics remain authoritative.
+- Project-wide scans compile every unopened `.imba` file once, group files by nearest `tsconfig.json`, `jsconfig.json`, or package/workspace root, then run one shared TypeScript LanguageService per group.
+- Never return to the old path that creates a fresh TypeScript LanguageService for every unopened file; it is too expensive in monorepos.
+- Avoid overlapping full project scans. If a new request arrives while one scan is running, queue a single follow-up scan and ignore stale results.
 - Watch `.imba` create/change/delete events when the client supports file watchers.
 - Clear diagnostics when files are deleted.
 - Avoid duplicate empty publishes.

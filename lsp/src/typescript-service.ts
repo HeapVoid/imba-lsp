@@ -10,7 +10,9 @@ export interface VirtualImbaFile {
 }
 
 export interface TypeScriptLanguageServiceOptions {
+  configPath?: string | null;
   compilerOptions?: ts.CompilerOptions;
+  currentDirectory?: string;
 }
 
 const virtualImbaFilesByService = new WeakMap<ts.LanguageService, Map<string, VirtualImbaFile>>();
@@ -20,7 +22,23 @@ export function createTypeScriptLanguageService(
   source: string,
   options: TypeScriptLanguageServiceOptions = {},
 ): ts.LanguageService {
-  const project = projectConfigFor(fileName);
+  return createTypeScriptLanguageServiceForFiles(
+    [{ fileName, source }],
+    options,
+  );
+}
+
+export interface TypeScriptServiceFile {
+  fileName: string;
+  source: string;
+}
+
+export function createTypeScriptLanguageServiceForFiles(
+  files: TypeScriptServiceFile[],
+  options: TypeScriptLanguageServiceOptions = {},
+): ts.LanguageService {
+  const primaryFileName = files[0]?.fileName ?? path.join(process.cwd(), "untitled.js");
+  const project = projectConfigFor(primaryFileName, options);
   const compilerOptions: ts.CompilerOptions = {
     ...defaultCompilerOptions,
     ...project.compilerOptions,
@@ -28,17 +46,22 @@ export function createTypeScriptLanguageService(
     allowJs: true,
   };
   const imbaRuntimeTypings = imbaRuntimeTypingsFor(project.currentDirectory);
-  const virtualFiles = new Map<string, string>([[fileName, source]]);
+  const virtualFiles = new Map<string, string>(
+    files.map((file) => [file.fileName, file.source]),
+  );
   if (imbaRuntimeTypings) {
     virtualFiles.set(imbaRuntimeTypings.fileName, imbaRuntimeTypings.source);
   }
   const virtualImbaFiles = new Map<string, VirtualImbaFile>();
+  const virtualFileNames = new Set(
+    [...virtualFiles.keys()].map((file) => path.resolve(file)),
+  );
   const scriptFileNames = [
-    fileName,
-    ...(imbaRuntimeTypings ? [imbaRuntimeTypings.fileName] : []),
+    ...virtualFiles.keys(),
     ...project.fileNames.filter(
       (projectFile) =>
-        path.resolve(projectFile) !== path.resolve(fileName) &&
+        isAmbientProjectFile(projectFile) &&
+        !virtualFileNames.has(path.resolve(projectFile)) &&
         path.resolve(projectFile) !== path.resolve(imbaRuntimeTypings?.fileName ?? ""),
     ),
   ];
@@ -123,9 +146,16 @@ const defaultCompilerOptions: ts.CompilerOptions = {
 
 const projectConfigCache = new Map<string, ProjectConfig>();
 
-function projectConfigFor(fileName: string): ProjectConfig {
-  const startDirectory = path.dirname(path.resolve(fileName));
-  const configPath = ts.findConfigFile(startDirectory, ts.sys.fileExists, "tsconfig.json");
+function projectConfigFor(
+  fileName: string,
+  options: TypeScriptLanguageServiceOptions = {},
+): ProjectConfig {
+  const startDirectory = path.resolve(
+    options.currentDirectory ?? path.dirname(path.resolve(fileName)),
+  );
+  const configPath = options.configPath === undefined
+    ? findProjectConfigPath(startDirectory)
+    : options.configPath;
   if (!configPath) {
     return {
       compilerOptions: {},
@@ -164,15 +194,34 @@ function projectConfigFor(fileName: string): ProjectConfig {
   return project;
 }
 
+function isAmbientProjectFile(fileName: string): boolean {
+  return /\.d\.[cm]?ts$/.test(fileName);
+}
+
+function findProjectConfigPath(startDirectory: string): string | null {
+  let directory = path.resolve(startDirectory);
+
+  while (true) {
+    const tsconfigPath = path.join(directory, "tsconfig.json");
+    if (ts.sys.fileExists(tsconfigPath)) return tsconfigPath;
+
+    const jsconfigPath = path.join(directory, "jsconfig.json");
+    if (ts.sys.fileExists(jsconfigPath)) return jsconfigPath;
+
+    const parent = path.dirname(directory);
+    if (parent === directory) return null;
+    directory = parent;
+  }
+}
+
 function resolveImbaModule(
   moduleName: string,
   containingFile: string,
   virtualFiles: Map<string, string>,
   virtualImbaFiles: Map<string, VirtualImbaFile>,
 ): ts.ResolvedModuleFull | undefined {
-  if (!moduleName.endsWith(".imba")) return undefined;
-
-  const sourcePath = path.resolve(path.dirname(containingFile), moduleName);
+  const sourcePath = imbaSourcePathForModule(moduleName, containingFile);
+  if (!sourcePath) return undefined;
   if (!ts.sys.fileExists(sourcePath)) return undefined;
 
   const virtualPath = `${sourcePath}.js`;
@@ -200,6 +249,24 @@ function resolveImbaModule(
     isExternalLibraryImport: false,
     resolvedFileName: virtualPath,
   };
+}
+
+function imbaSourcePathForModule(
+  moduleName: string,
+  containingFile: string,
+): string | null {
+  if (moduleName.endsWith(".imba")) {
+    return path.resolve(path.dirname(containingFile), moduleName);
+  }
+
+  if (moduleName.endsWith(".js")) {
+    return path.resolve(
+      path.dirname(containingFile),
+      `${moduleName.slice(0, -".js".length)}.imba`,
+    );
+  }
+
+  return null;
 }
 
 function resolveModuleName(

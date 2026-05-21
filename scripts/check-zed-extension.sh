@@ -4,6 +4,7 @@ set -euo pipefail
 node scripts/check-zed-language-configs.js
 
 npm run lsp:build
+npm run zed:build-grammar -- grammars/imba.wasm
 
 if ! command -v cargo >/dev/null 2>&1 && [ -f "$HOME/.cargo/env" ]; then
 	# rustup can be installed without modifying the parent process PATH.

@@ -22,9 +22,17 @@ async function main(): Promise<void> {
     const compilerErrorPath = path.join(root, "compiler-error.imba");
     const typeErrorPath = path.join(root, "type-error.imba");
     const openErrorPath = path.join(root, "open-error.imba");
+    const jsConfigDir = path.join(root, "pocketbase");
+    const jsConfigTypePath = path.join(jsConfigDir, "types.d.ts");
+    const jsConfigPath = path.join(jsConfigDir, "jsconfig.json");
+    const jsConfigTestPath = path.join(jsConfigDir, "test", "security.js");
+    const jsConfigImbaPath = path.join(jsConfigDir, "src", "hook.imba");
+    const jsConfigHelperPath = path.join(jsConfigDir, "src", "helper.imba");
     const ignoredPath = path.join(root, "node_modules", "ignored.imba");
 
     fs.mkdirSync(path.dirname(ignoredPath), { recursive: true });
+    fs.mkdirSync(path.dirname(jsConfigImbaPath), { recursive: true });
+    fs.mkdirSync(path.dirname(jsConfigTestPath), { recursive: true });
     fs.writeFileSync(
       compilerErrorPath,
       [
@@ -45,6 +53,60 @@ async function main(): Promise<void> {
     );
     fs.writeFileSync(openErrorPath, fs.readFileSync(compilerErrorPath, "utf8"));
     fs.writeFileSync(ignoredPath, fs.readFileSync(compilerErrorPath, "utf8"));
+    fs.writeFileSync(
+      jsConfigTypePath,
+      [
+        "declare const pocketGlobal: { ready: boolean }",
+        "declare namespace security {",
+        "\tinterface pseudorandomString {",
+        "\t\t(length: number): string",
+        "\t}",
+        "}",
+        "declare namespace $security {",
+        "\tlet pseudorandomString: security.pseudorandomString",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    fs.writeFileSync(
+      jsConfigTestPath,
+      [
+        "globalThis.$security = {",
+        "\tpseudorandomString: () => 'test-seed',",
+        "};",
+        "",
+      ].join("\n"),
+    );
+    fs.writeFileSync(
+      jsConfigPath,
+      JSON.stringify({
+        compilerOptions: {
+          allowJs: true,
+          checkJs: false,
+          lib: ["ES2022"],
+        },
+        include: ["test/**/*.js", "types.d.ts"],
+      }),
+    );
+    fs.writeFileSync(
+      jsConfigImbaPath,
+      [
+        "import {helper} from './helper.js'",
+        "def hook",
+        "\tpocketGlobal.ready",
+        "\t$security.pseudorandomString(20)",
+        "\thelper!",
+        "",
+      ].join("\n"),
+    );
+    fs.writeFileSync(
+      jsConfigHelperPath,
+      [
+        "export def helper",
+        "\t'ok'",
+        "",
+      ].join("\n"),
+    );
 
     const files = await collectProjectImbaFiles(root);
     assert.ok(files.includes(compilerErrorPath));
@@ -66,12 +128,46 @@ async function main(): Promise<void> {
     );
 
     const typeError = resultFor(results, typeErrorPath);
+    assert.equal(
+      typeError.diagnostics.some((diagnostic) => diagnostic.source === "typescript"),
+      false,
+      "project diagnostics helper should stay compiler-only unless TypeScript is requested",
+    );
+
+    const typeScriptProjectResults = await buildProjectDiagnostics(root, new Set([openUri]), {
+      includeTypeScript: true,
+    });
+    const projectTypeError = resultFor(typeScriptProjectResults, typeErrorPath);
     assert.ok(
-      typeError.diagnostics.some((diagnostic) =>
+      projectTypeError.diagnostics.some((diagnostic) =>
         diagnostic.source === "typescript" &&
         diagnostic.message.includes("toUpperCase")
       ),
-      "expected TypeScript diagnostic for unopened project file",
+      "expected shared TypeScript diagnostics for unopened project file",
+    );
+
+    const jsConfigResult = resultFor(typeScriptProjectResults, jsConfigImbaPath);
+    assert.equal(
+      jsConfigResult.diagnostics.some((diagnostic) =>
+        diagnostic.source === "typescript" &&
+        (diagnostic.message.includes("pocketGlobal") ||
+          diagnostic.message.includes("0 arguments") ||
+          diagnostic.message.includes("./helper.js"))
+      ),
+      false,
+      "expected project-wide TypeScript diagnostics to load jsconfig globals, ignore root JS stubs, and resolve .js imports to virtual .imba modules",
+    );
+
+    const typeScriptResult = await buildProjectDiagnosticFile(typeErrorPath, {
+      includeTypeScript: true,
+    });
+    assert.ok(typeScriptResult, "expected explicit TypeScript diagnostic result");
+    assert.ok(
+      typeScriptResult.diagnostics.some((diagnostic) =>
+        diagnostic.source === "typescript" &&
+        diagnostic.message.includes("toUpperCase")
+      ),
+      "expected TypeScript diagnostics when explicitly requested",
     );
   } finally {
     fs.rmSync(root, { force: true, recursive: true });

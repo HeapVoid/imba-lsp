@@ -20,6 +20,10 @@
     "style": ["property", "attribute"]
   },
   {
+    "token_type": "cssFunction",
+    "style": ["imba.css.function", "function"]
+  },
+  {
     "token_type": "cssValue",
     "style": ["string.special", "string"]
   },

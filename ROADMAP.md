@@ -74,8 +74,10 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 - [x] Add Imba CSS shortcut/property completions, property-specific value suggestions, modifier completions, and hover help.
 - [x] Index and type workspace-local Imba CSS tokens and CSS custom properties for scoped value completions and hovers.
 - [ ] Expand docs extraction beyond directly preceding `#` comments.
-- [x] Expand TypeScript diagnostics to unopened project/imported `.imba` files without noisy duplicate publishes.
+- [x] Keep project-wide diagnostics off the per-file TypeScript LanguageService path to avoid monorepo CPU churn.
+- [x] Build a shared project-level TypeScript diagnostic service for unopened files and re-enable project-wide TS diagnostics.
 - [x] Refresh project-wide diagnostics from `.imba` file watcher create/change/delete events.
+- [x] Prepare `imba-lsp` as an npm package and make the Zed adapter install it for published extensions while preserving local dev builds.
 - [ ] Port useful codefix behavior from `typescript-imba-plugin` as reference, with license checks before copying anything.
 
 ## Known Risks
@@ -87,4 +89,4 @@ Goal: completion, hover, and navigation that understand compiled Imba output.
 - VS Code completions depend on a custom bridge, while the TypeScript plugin's standard `getCompletionsAtPosition` currently returns `null`.
 - Completion, hover, and go-to-definition require TypeScript LanguageService integration plus careful Imba-to-compiled-output position mapping.
 - CSS in Imba is its own compiled DSL, not raw CSS; Zed injection should stay conservative.
-- Zed extension publishing requires a valid accepted license for extension code.
+- Before the Zed registry PR, publish `imba-lsp` to npm and replace the local grammar `file://` URL in `extension.toml` with the public repository URL plus commit SHA.

@@ -41,14 +41,16 @@ This repository currently contains a working Zed dev-extension MVP:
 - initial span-based mapping from Imba source offsets to generated JS offsets via native `locs.spans`
 - member completions now include explicit LSP replacement edits instead of relying on editor word guessing
 - TypeScript bridge reads project `tsconfig.json` and resolves imported `.imba` files as virtual compiled JS modules for cross-file hover/completion
+- TypeScript bridge also honors `jsconfig.json` and maps generated `.js` imports back to sibling `.imba` source files when possible
 - cross-file TypeScript definitions from virtual compiled `.imba` modules are mapped back to source `.imba` ranges
 - cross-file definitions cover named imports, alias re-exports, default exports, namespace imports, and import module specifiers
 - cross-file TypeScript hover for imported `.imba` symbols prefers the original Imba declaration and suppresses weak `any` hovers
 - initial references and rename support use TypeScript rename/reference locations mapped back to Imba source, with a conservative local fallback
 - initial TypeScript diagnostics for the open `.imba` document, mapped back from compiled JS through native source spans
 - TypeScript diagnostics are also mapped for imported virtual `.imba` modules and published for matching open documents
-- project-wide diagnostics scan unopened `.imba` files in the workspace, skip open buffers, and publish compiler/TypeScript diagnostics without duplicate empty publishes
+- project-wide diagnostics scan unopened `.imba` files in the workspace, skip open buffers, and publish compiler + shared TypeScript diagnostics without duplicate empty publishes
 - project-wide diagnostics register `.imba` file watchers when the client supports them, refresh changed/created files quickly, and clear deleted-file diagnostics
+- TypeScript diagnostics use an Imba-native noise policy: dynamic object-property checks, null-safe `..` access, default-value pseudo-typing noise, string-valued `fetch` headers objects, and `$app` transaction pass-through patterns are suppressed, while primitive/type-specific mistakes still surface
 - TypeScript diagnostics load Imba runtime typings for compiled JS and can be checked by `lsp:probe -- --typescript-diagnostics`
 
 The Tree-sitter grammar is not a complete Imba parser, and it should not be expanded as though it were the main semantic parser. It intentionally avoids a full expression/control-flow AST; the LSP calls `imba/compiler` directly and keeps the compiler result as document state.
@@ -138,7 +140,13 @@ npm --prefix lsp install
 npm run lsp:build
 ```
 
-The adapter launches Zed's managed Node binary with `lsp/dist/src/server.js --stdio`.
+The adapter launches Zed's managed Node binary. In local development it uses the built `lsp/dist/src/server.js` from this repository. In a published extension, when the local build is absent, the adapter installs `imba-lsp` from npm through Zed's extension API and launches `node_modules/imba-lsp/dist/src/server.js --stdio`.
+
+Check the npm package contents before publishing:
+
+```sh
+npm run lsp:pack
+```
 
 For local dev-extension testing, Zed must be able to find `rustc` through the GUI process `PATH`. Installing Rust via `rustup` is required for dev extensions; published extensions are precompiled by Zed's extension packaging flow.
 

@@ -31,6 +31,7 @@ export const semanticTokenTypes = [
   "tag",
   "attribute",
   "objectKey",
+  "cssFunction",
   "cssProperty",
   "cssValue",
   "boolean",
@@ -148,24 +149,32 @@ const operatorValueTokens = new Set([
 ]);
 
 const declarationTokens = new Set(["DEF", "GET", "SET"]);
-const identifierTokens = new Set(["IDENTIFIER", "SYMBOL", "SYMBOLID", "ARGVAR"]);
+const identifierTokens = new Set([
+  "IDENTIFIER",
+  "SYMBOL",
+  "SYMBOLID",
+  "ARGVAR",
+]);
 const propertyAccessTokens = new Set([".", "?."]);
 const callFollowerTokens = new Set(["CALL_START", "BANG"]);
 const signatureEndTokens = new Set(["DEF_BODY", "TERMINATOR", "OUTDENT"]);
 const declarationLinePattern =
-  /^(\t*)(?:(export)\s+)?(?:(static)\s+)?(?:extend\s+)?(?:local\s+)?(?:global\s+)?(class|tag|def|get|set|prop|attr)\s+(@?[$A-Za-z_][\w$?!:-]*)/;
+  /^(\t*)(?:(export)\s+)?(?:default\s+)?(?:(static)\s+)?(?:extend\s+)?(?:local\s+)?(?:global\s+)?(class|tag|def|get|set|prop|attr)\s+(@?[$A-Za-z_][\w$?!:-]*)/;
 const bindingLinePattern = /^(\t*)(?:(let|const|var)\s+)([$A-Za-z_][\w$?!-]*)/;
-const assignmentLinePattern = /^(\t*)([$A-Za-z_][\w$?!-]*)\s*=/;
+const assignmentLinePattern =
+  /^(\t*)([$A-Za-z_][\w$?!-]*)\s*(?:\+=|-=|\*=|\/=|%=|\?=|\|\|=|&&=|=\?|=(?!=))/;
 const tagSegmentPattern = /<(?!!|\/)(?=[$A-Za-z_.#])([^>\n]*)>?/g;
 const cssSelectorClassOrIdPattern = /([.#])([@$A-Za-z_][\w$-]*)/g;
-const cssSelectorElementPattern = /(^|[\s>+~,(])([A-Za-z_][\w$-]*)(?=[\s.#:@[>+~),]|$)/g;
+const cssSelectorElementPattern =
+  /(^|[\s>+~,(])([A-Za-z_][\w$-]*)(?=[\s.#:@[>+~),]|$)/g;
 const cssSelectorModifierPattern = /@([@$A-Za-z_][\w$-]*)/g;
 const cssSelectorParentPattern = /&/g;
 const cssSelectorPseudoPattern = /:{1,2}([@$A-Za-z_][\w$-]*)/g;
 const tagClassTokenPattern = /([.#])([@$A-Za-z_][\w$-]*)/g;
-const tagAttributeTokenPattern = /(?:^|\s)([@$A-Za-z_][\w$-]*)(?=\s*(?:=|$|\]))/g;
+const tagAttributeTokenPattern =
+  /(?:^|\s)([@$A-Za-z_][\w$-]*)(?=\s*(?:=|$|\]))/g;
 const tagEventTokenPattern = /@([@$A-Za-z_][\w$-]*)/g;
-const stylePropertyPattern = /(?:^|\s)([$A-Za-z_][\w$-]*)\s*:/g;
+const stylePropertyPattern = /(?:^|\s)([$A-Za-z_][\w$-]*):/g;
 
 export function buildSemanticTokenData(
   document: TextDocument,
@@ -189,8 +198,20 @@ export function buildSemanticTokenData(
       signature,
     };
 
+    if (token.type === "CSS_SEL") {
+      addCompilerCssSelectorItems(items, document, token);
+      signature = updateSignatureContext(signature, token.type);
+      previousType = token.type;
+      continue;
+    }
+
     const semanticType = classify(token.type, context);
-    if (semanticType && token.span && token.span.start >= 0 && token.span.end > token.span.start) {
+    if (
+      semanticType &&
+      token.span &&
+      token.span.start >= 0 &&
+      token.span.end > token.span.start
+    ) {
       const start = document.positionAt(token.span.start);
       const end = document.positionAt(token.span.end);
 
@@ -204,7 +225,10 @@ export function buildSemanticTokenData(
             line: start.line,
             character: start.character,
             length,
-            typeIndex: tokenTypeIndex.get(semanticType) ?? tokenTypeIndex.get("variable") ?? 0,
+            typeIndex:
+              tokenTypeIndex.get(semanticType) ??
+              tokenTypeIndex.get("variable") ??
+              0,
             modifiers: modifierMask(token.type, semanticType, context),
             priority: 0,
           });
@@ -248,11 +272,12 @@ interface SemanticItem {
 }
 
 function encodeSemanticTokens(items: SemanticItem[]): number[] {
-  items.sort((a, b) =>
-    a.line - b.line ||
-    a.character - b.character ||
-    b.priority - a.priority ||
-    a.length - b.length
+  items.sort(
+    (a, b) =>
+      a.line - b.line ||
+      a.character - b.character ||
+      b.priority - a.priority ||
+      a.length - b.length,
   );
 
   const data: number[] = [];
@@ -272,9 +297,16 @@ function encodeSemanticTokens(items: SemanticItem[]): number[] {
     }
 
     const deltaLine = item.line - lastLine;
-    const deltaStart = deltaLine === 0 ? item.character - lastCharacter : item.character;
+    const deltaStart =
+      deltaLine === 0 ? item.character - lastCharacter : item.character;
 
-    data.push(deltaLine, deltaStart, item.length, item.typeIndex, item.modifiers);
+    data.push(
+      deltaLine,
+      deltaStart,
+      item.length,
+      item.typeIndex,
+      item.modifiers,
+    );
 
     lastLine = item.line;
     lastCharacter = item.character;
@@ -288,20 +320,24 @@ function classify(type: string, context: ClassificationContext): string | null {
   const { previousType, nextType, signature } = context;
 
   if (keywordTokens.has(type)) return "keyword";
-  if (operatorTokens.has(type) || operatorValueTokens.has(type)) return "operator";
+  if (operatorTokens.has(type) || operatorValueTokens.has(type))
+    return "operator";
 
   if (type === "COMMENT" || type === "HERECOMMENT") return "comment";
   if (type === "STRING" || type === "NEOSTRING") return "string";
   if (type === "REGEX") return "regexp";
-  if (type === "NUMBER" || type === "DIMENSION" || type === "PERCENTAGE") return "number";
+  if (type === "NUMBER" || type === "DIMENSION" || type === "PERCENTAGE")
+    return "number";
   if (type === "DECORATOR") return "decorator";
   if (type === "TRUE" || type === "FALSE") return "boolean";
   if (type === "NULL") return "constant";
-  if ((type === "SELF" || type === "THIS") && previousType === "TAG_START") return "tag";
+  if ((type === "SELF" || type === "THIS") && previousType === "TAG_START")
+    return "tag";
   if (type === "SELF" || type === "THIS") return "selfKeyword";
 
-  if (type === "CSSFUNCTION") return "function";
-  if (type === "COLOR" || type === "CSSIDENTIFIER" || type === "CSSVAR") return "cssValue";
+  if (type === "CSSFUNCTION") return "cssFunction";
+  if (type === "COLOR" || type === "CSSIDENTIFIER" || type === "CSSVAR")
+    return "cssValue";
   if (type === "CSSPROP") return "cssProperty";
   if (type === "CSS_SEL") return null;
 
@@ -367,7 +403,13 @@ function buildSourceSemanticItems(source: string): SemanticItem[] {
 
     const declaration = text.match(declarationLinePattern);
     if (declaration) {
-      addDeclarationLineItems(items, declaration, line, text, nearestContainerKind(stack));
+      addDeclarationLineItems(
+        items,
+        declaration,
+        line,
+        text,
+        nearestContainerKind(stack),
+      );
 
       const keyword = declaration[4] ?? "";
       if (keyword === "class" || keyword === "tag") {
@@ -388,17 +430,29 @@ function buildSourceSemanticItems(source: string): SemanticItem[] {
     if (assignment && !binding) {
       const name = assignment[2] ?? "";
       const containerKind = nearestContainerKind(stack);
-      addLineToken(items, line, text.indexOf(name), name.length, fieldSemanticType(containerKind, "variable"), {
-        modifiers: modifierNamesToMask(["declaration"]),
-        priority: 4,
-      });
+      addLineToken(
+        items,
+        line,
+        text.indexOf(name),
+        name.length,
+        fieldSemanticType(containerKind, "variable"),
+        {
+          modifiers: modifierNamesToMask(["declaration"]),
+          priority: 4,
+        },
+      );
     }
 
     const cssLine = text.match(/^(\t*)css\b/);
     if (cssLine) {
       cssIndent = indent;
       const selectorStart = text.indexOf("css") + 3;
-      scanCssSelector(items, line, cssSelectorPrefix(text.slice(selectorStart)), selectorStart);
+      scanCssSelector(
+        items,
+        line,
+        cssSelectorPrefix(text.slice(selectorStart)),
+        selectorStart,
+      );
     } else if (cssIndent !== null && indent > cssIndent) {
       scanCssLine(items, line, text);
     }
@@ -439,7 +493,8 @@ function scanSignatureParameters(
   signatureStart: number,
 ): void {
   const rest = text.slice(signatureStart);
-  const paramPattern = /([@$A-Za-z_][\w$?!-]*)(?:\s*:\s*([@$A-Za-z_][\w$?!:-]*))?/g;
+  const paramPattern =
+    /([@$A-Za-z_][\w$?!-]*)(?:\s*:\s*([@$A-Za-z_][\w$?!:-]*))?/g;
   let match: RegExpExecArray | null;
 
   while ((match = paramPattern.exec(rest)) !== null) {
@@ -452,7 +507,8 @@ function scanSignatureParameters(
 
     const typeName = match[2];
     if (typeName) {
-      const typeStart = signatureStart + match.index + match[0].lastIndexOf(typeName);
+      const typeStart =
+        signatureStart + match.index + match[0].lastIndexOf(typeName);
       addLineToken(items, line, typeStart, typeName.length, "type", {
         priority: 5,
       });
@@ -476,10 +532,17 @@ function scanTagSegments(
     const tagNameMatch = body.match(/^([@$A-Za-z_][\w$-]*|self|this)/);
     if (tagNameMatch) {
       const name = tagNameMatch[1] ?? "";
-      addLineToken(items, line, bodyStart, name.length, name === "self" || name === "this" ? "tag" : "tag", {
-        modifiers: modifierNamesToMask([]),
-        priority: 4,
-      });
+      addLineToken(
+        items,
+        line,
+        bodyStart,
+        name.length,
+        name === "self" || name === "this" ? "tag" : "tag",
+        {
+          modifiers: modifierNamesToMask([]),
+          priority: 4,
+        },
+      );
     }
 
     scanTagClassTokens(items, line, body, bodyStart);
@@ -506,9 +569,16 @@ function scanTagClassTokens(
   while ((match = tagClassTokenPattern.exec(body)) !== null) {
     const prefix = match[1] ?? "";
     const name = match[2] ?? "";
-    addLineToken(items, line, bodyStart + match.index + prefix.length, name.length, prefix === "#" ? "tagId" : "tagClass", {
-      priority: 6,
-    });
+    addLineToken(
+      items,
+      line,
+      bodyStart + match.index + prefix.length,
+      name.length,
+      prefix === "#" ? "tagId" : "tagClass",
+      {
+        priority: 6,
+      },
+    );
   }
 }
 
@@ -523,9 +593,16 @@ function scanTagEventTokens(
 
   while ((match = tagEventTokenPattern.exec(body)) !== null) {
     const name = match[1] ?? "";
-    addLineToken(items, line, bodyStart + match.index + 1, name.length, "event", {
-      priority: 6,
-    });
+    addLineToken(
+      items,
+      line,
+      bodyStart + match.index + 1,
+      name.length,
+      "event",
+      {
+        priority: 6,
+      },
+    );
   }
 }
 
@@ -541,6 +618,7 @@ function scanTagAttributeTokens(
   while ((match = tagAttributeTokenPattern.exec(body)) !== null) {
     const name = match[1] ?? "";
     const nameStart = bodyStart + match.index + match[0].lastIndexOf(name);
+    if (match.index === 0) continue;
     if (name.startsWith("@")) continue;
     if (name === "self" || name === "this") continue;
 
@@ -562,11 +640,7 @@ function scanInlineStyleTokens(
   }
 }
 
-function scanCssLine(
-  items: SemanticItem[],
-  line: number,
-  text: string,
-): void {
+function scanCssLine(items: SemanticItem[], line: number, text: string): void {
   const trimmed = text.trimStart();
   if (!trimmed || trimmed.startsWith("#")) return;
 
@@ -586,13 +660,14 @@ function scanCssSelector(
   line: number,
   selector: string,
   startCharacter: number,
+  priorityOffset = 0,
 ): void {
   let match: RegExpExecArray | null;
 
   cssSelectorParentPattern.lastIndex = 0;
   while ((match = cssSelectorParentPattern.exec(selector)) !== null) {
     addLineToken(items, line, startCharacter + match.index, 1, "cssSelector", {
-      priority: 4,
+      priority: 4 + priorityOffset,
     });
   }
 
@@ -600,25 +675,46 @@ function scanCssSelector(
   while ((match = cssSelectorClassOrIdPattern.exec(selector)) !== null) {
     const prefix = match[1] ?? "";
     const name = match[2] ?? "";
-    addLineToken(items, line, startCharacter + match.index + prefix.length, name.length, prefix === "#" ? "tagId" : "tagClass", {
-      priority: 6,
-    });
+    addLineToken(
+      items,
+      line,
+      startCharacter + match.index + prefix.length,
+      name.length,
+      prefix === "#" ? "tagId" : "tagClass",
+      {
+        priority: 6 + priorityOffset,
+      },
+    );
   }
 
   cssSelectorPseudoPattern.lastIndex = 0;
   while ((match = cssSelectorPseudoPattern.exec(selector)) !== null) {
     const name = match[1] ?? "";
-    addLineToken(items, line, startCharacter + match.index + match[0].lastIndexOf(name), name.length, "tagClass", {
-      priority: 6,
-    });
+    addLineToken(
+      items,
+      line,
+      startCharacter + match.index + match[0].lastIndexOf(name),
+      name.length,
+      "tagClass",
+      {
+        priority: 6 + priorityOffset,
+      },
+    );
   }
 
   cssSelectorModifierPattern.lastIndex = 0;
   while ((match = cssSelectorModifierPattern.exec(selector)) !== null) {
     const name = match[1] ?? "";
-    addLineToken(items, line, startCharacter + match.index + 1, name.length, "tagClass", {
-      priority: 6,
-    });
+    addLineToken(
+      items,
+      line,
+      startCharacter + match.index + 1,
+      name.length,
+      "tagClass",
+      {
+        priority: 6 + priorityOffset,
+      },
+    );
   }
 
   cssSelectorElementPattern.lastIndex = 0;
@@ -627,10 +723,38 @@ function scanCssSelector(
     if (element === "css") continue;
 
     const leading = match[1]?.length ?? 0;
-    addLineToken(items, line, startCharacter + match.index + leading, element.length, "cssSelector", {
-      priority: 4,
-    });
+    addLineToken(
+      items,
+      line,
+      startCharacter + match.index + leading,
+      element.length,
+      "cssSelector",
+      {
+        priority: 4 + priorityOffset,
+      },
+    );
   }
+}
+
+function addCompilerCssSelectorItems(
+  items: SemanticItem[],
+  document: TextDocument,
+  token: CompilerTokenInfo,
+): void {
+  if (!token.span || token.span.start < 0 || token.span.end <= token.span.start)
+    return;
+
+  const start = document.positionAt(token.span.start);
+  const end = document.positionAt(token.span.end);
+
+  if (start.line !== end.line) return;
+
+  const selector = document.getText({
+    start,
+    end,
+  });
+
+  scanCssSelector(items, start.line, selector, start.character, 4);
 }
 
 function cssSelectorPrefix(text: string): string {
@@ -645,7 +769,9 @@ function firstStylePropertyMatch(text: string): RegExpExecArray | null {
   return stylePropertyPattern.exec(text);
 }
 
-function inlineStyleRanges(body: string): Array<{ start: number; end: number }> {
+function inlineStyleRanges(
+  body: string,
+): Array<{ start: number; end: number }> {
   const ranges: Array<{ start: number; end: number }> = [];
 
   for (let index = 0; index < body.length; index++) {
@@ -664,7 +790,8 @@ function inlineStyleRanges(body: string): Array<{ start: number; end: number }> 
 
 function isPotentialInlineStyleStart(text: string, index: number): boolean {
   const tokenStart = text.slice(0, index).search(/\S+$/);
-  if (tokenStart >= 0 && text.slice(tokenStart, index).includes("=")) return false;
+  if (tokenStart >= 0 && text.slice(tokenStart, index).includes("="))
+    return false;
 
   for (let cursor = index - 1; cursor >= 0; cursor--) {
     const character = text[cursor];
@@ -725,7 +852,10 @@ function nearestContainerKind(stack: Array<{ kind: string }>): string | null {
   return null;
 }
 
-function fieldSemanticType(containerKind: string | null, fallback: string): string {
+function fieldSemanticType(
+  containerKind: string | null,
+  fallback: string,
+): string {
   switch (containerKind) {
     case "class":
       return "classField";
@@ -736,12 +866,20 @@ function fieldSemanticType(containerKind: string | null, fallback: string): stri
   }
 }
 
-function declarationSemanticType(keyword: string, containerKind: string | null): string {
+function declarationSemanticType(
+  keyword: string,
+  containerKind: string | null,
+): string {
   switch (keyword) {
     case "class":
       return "class";
     case "tag":
       return "tag";
+    case "get":
+    case "set":
+      return containerKind === "class" || containerKind === "tag"
+        ? fieldSemanticType(containerKind, "property")
+        : "method";
     case "prop":
     case "attr":
       return fieldSemanticType(containerKind, "property");
@@ -823,7 +961,10 @@ function updateSignatureContext(
   return signature;
 }
 
-function nextTokenType(tokens: CompilerTokenInfo[], index: number): string | null {
+function nextTokenType(
+  tokens: CompilerTokenInfo[],
+  index: number,
+): string | null {
   return tokens[index + 1]?.type ?? null;
 }
 
@@ -842,7 +983,9 @@ function readTokenType(token: ImbaToken): string | null {
   return token._type ?? null;
 }
 
-function readTokenSpan(token: ImbaToken): { start: number; end: number } | null {
+function readTokenSpan(
+  token: ImbaToken,
+): { start: number; end: number } | null {
   if (typeof token.loc === "function") {
     const loc = token.loc();
     if (Array.isArray(loc)) {

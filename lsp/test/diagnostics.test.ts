@@ -14,7 +14,7 @@ const fixturePath = path.resolve(__dirname, "../fixtures/sample.imba");
 const validSource = [
   "tag app",
   "\tdef render",
-  "\t\t<div.card data-id=1 @click=save> \"Hi\"",
+  '\t\t<div.card data-id=1 @click=save> "Hi"',
   "\tcss section.card",
   "\t\tc:red5",
   "",
@@ -63,6 +63,9 @@ const semanticSource = [
   "\t\t&:hover opacity: 0.9",
   "\t\t&:before bc: blue5/50",
   "\t\th1 fs: 24px",
+  "\t\tplus-icon :hover >>> svg",
+  "\t\t\trotate: 90deg",
+  "\t\t\ttween: ease-in-out .2s",
   "",
 ].join("\n");
 
@@ -72,22 +75,38 @@ const objectKeySource = [
   "",
 ].join("\n");
 
-const comparisonSource = [
-  "def compare a, b",
-  "\treturn a<b",
+const comparisonSource = ["def compare a, b", "\treturn a<b", ""].join("\n");
+
+const bareTagSource = [
+  "tag shell",
+  "\tdef render",
+  "\t\t<main>",
+  "\t\t<sidebar-nav>",
+  "\t\t<bread-crumbs>",
+  "\t\t<login-page route='/login'>",
   "",
 ].join("\n");
 
 const fieldSource = [
   "class Person",
   "\tname = 'Ada'",
+  "\tget label",
+  "\tset label value",
   "\tdef rename value",
   "\t\tname = value",
   "",
   "tag profile-card",
   "\ttitle = ''",
+  "\tget ready?",
+  "\tset ready value",
   "\tdef render",
   "\t\t<div title=title data-id=title>",
+  "",
+  "export default class SessionStore",
+  "\tinventory-load-id = 0",
+  "\tdef resetSession",
+  "\t\tinventory-error = ''",
+  "\t\tinventory-load-id += 1",
   "",
 ].join("\n");
 
@@ -103,7 +122,8 @@ const fieldSource = [
   assert.match(result.diagnostics[0].message, /Unexpected|unexpected|parse/i);
   assert.equal(result.diagnostics[0].source, "imba-parser");
   assert.ok(
-    result.diagnostics[0].range.end.character > result.diagnostics[0].range.start.character,
+    result.diagnostics[0].range.end.character >
+      result.diagnostics[0].range.start.character,
     "expected visible non-empty diagnostic range",
   );
 }
@@ -114,16 +134,32 @@ const fieldSource = [
   const result = compileImba(validSource, fixturePath);
   const tokens = buildSemanticTokenData(document, result.compilation);
   assert.ok(tokens.length > 0, "expected semantic tokens");
-  assert.equal(tokens.length % 5, 0, "semantic tokens must be LSP encoded in groups of five");
+  assert.equal(
+    tokens.length % 5,
+    0,
+    "semantic tokens must be LSP encoded in groups of five",
+  );
 
   const decoded = decodeSemanticTokens(validSource, tokens);
   const seenTokenTypes = new Set(decoded.map((token) => token.type));
 
   assert.ok(seenTokenTypes.has("tag"), "expected tag semantic tokens");
-  assert.ok(seenTokenTypes.has("tagAttribute"), "expected tag attribute semantic tokens");
-  assert.ok(seenTokenTypes.has("tagClass"), "expected tag class semantic tokens");
-  assert.ok(seenTokenTypes.has("cssProperty"), "expected CSS property semantic tokens");
-  assert.ok(seenTokenTypes.has("cssValue"), "expected CSS value semantic tokens");
+  assert.ok(
+    seenTokenTypes.has("tagAttribute"),
+    "expected tag attribute semantic tokens",
+  );
+  assert.ok(
+    seenTokenTypes.has("tagClass"),
+    "expected tag class semantic tokens",
+  );
+  assert.ok(
+    seenTokenTypes.has("cssProperty"),
+    "expected CSS property semantic tokens",
+  );
+  assert.ok(
+    seenTokenTypes.has("cssValue"),
+    "expected CSS value semantic tokens",
+  );
   assert.ok(seenTokenTypes.has("method"), "expected method semantic tokens");
   assertSemanticTokensAreWellFormed(validSource, tokens);
 }
@@ -167,11 +203,12 @@ const fieldSource = [
   assertToken(decoded, "active", "tagClass", 10);
   assertToken(decoded, "data-id", "tagAttribute", 10);
   assertToken(decoded, "click", "event", 10);
-  assertToken(decoded, "var", "function", 10);
+  assertToken(decoded, "var", "cssFunction", 10);
   assertToken(decoded, "--accent", "cssValue", 10);
   assertToken(decoded, "section", "cssSelector", 11);
   assertToken(decoded, "card", "tagClass", 11);
   assertToken(decoded, "bgc", "cssProperty", 12);
+  assertToken(decoded, "var", "cssFunction", 12);
   assertToken(decoded, "&", "cssSelector", 13);
   assertToken(decoded, "hover", "tagClass", 13);
   assertToken(decoded, "opacity", "cssProperty", 13);
@@ -179,6 +216,18 @@ const fieldSource = [
   assertToken(decoded, "bc", "cssProperty", 14);
   assertToken(decoded, "h1", "cssSelector", 15);
   assertToken(decoded, "fs", "cssProperty", 15);
+  assertToken(decoded, "plus-icon", "cssSelector", 16);
+  assertToken(decoded, "hover", "tagClass", 16);
+  assertToken(decoded, "svg", "cssSelector", 16);
+  assertToken(decoded, "rotate", "cssProperty", 17);
+  assertToken(decoded, "tween", "cssProperty", 18);
+  assert.equal(
+    decoded.some(
+      (token) => token.text === "plus-icon" && token.type === "cssProperty",
+    ),
+    false,
+    "compiler CSS selectors must not be misclassified as CSS properties",
+  );
 }
 
 {
@@ -217,6 +266,22 @@ const fieldSource = [
 
 {
   const uri = pathToFileURL(fixturePath).toString();
+  const document = TextDocument.create(uri, "imba", 1, bareTagSource);
+  const result = compileImba(bareTagSource, fixturePath);
+  assert.equal(result.diagnostics.length, 0);
+  const tokens = buildSemanticTokenData(document, result.compilation);
+  assertSemanticTokensAreWellFormed(bareTagSource, tokens);
+
+  const decoded = decodeSemanticTokens(bareTagSource, tokens);
+  assertToken(decoded, "main", "tag", 2);
+  assertToken(decoded, "sidebar-nav", "tag", 3);
+  assertToken(decoded, "bread-crumbs", "tag", 4);
+  assertToken(decoded, "login-page", "tag", 5);
+  assertToken(decoded, "route", "tagAttribute", 5);
+}
+
+{
+  const uri = pathToFileURL(fixturePath).toString();
   const document = TextDocument.create(uri, "imba", 1, fieldSource);
   const tokens = buildSemanticTokenData(document, undefined);
   assertSemanticTokensAreWellFormed(fieldSource, tokens);
@@ -224,16 +289,35 @@ const fieldSource = [
   const decoded = decodeSemanticTokens(fieldSource, tokens);
   assertToken(decoded, "Person", "class", 0, ["declaration", "definition"]);
   assertToken(decoded, "name", "classField", 1, ["declaration"]);
-  assertToken(decoded, "name", "classField", 3, ["declaration"]);
-  assertToken(decoded, "profile-card", "tag", 5, ["declaration", "definition"]);
-  assertToken(decoded, "title", "tagField", 6, ["declaration"]);
-  assertToken(decoded, "title", "tagAttribute", 8);
-  assertToken(decoded, "data-id", "tagAttribute", 8);
+  assertToken(decoded, "label", "classField", 2, ["declaration", "definition"]);
+  assertToken(decoded, "label", "classField", 3, ["declaration", "definition"]);
+  assertToken(decoded, "name", "classField", 5, ["declaration"]);
+  assertToken(decoded, "profile-card", "tag", 7, ["declaration", "definition"]);
+  assertToken(decoded, "title", "tagField", 8, ["declaration"]);
+  assertToken(decoded, "ready?", "tagField", 9, ["declaration", "definition"]);
+  assertToken(decoded, "ready", "tagField", 10, ["declaration", "definition"]);
+  assertToken(decoded, "render", "method", 11, ["declaration", "definition"]);
+  assertToken(decoded, "title", "tagAttribute", 12);
+  assertToken(decoded, "data-id", "tagAttribute", 12);
+  assertToken(decoded, "SessionStore", "class", 14, [
+    "declaration",
+    "definition",
+  ]);
+  assertToken(decoded, "inventory-load-id", "classField", 15, ["declaration"]);
+  assertToken(decoded, "resetSession", "method", 16, [
+    "declaration",
+    "definition",
+  ]);
+  assertToken(decoded, "inventory-error", "classField", 17, ["declaration"]);
+  assertToken(decoded, "inventory-load-id", "classField", 18, ["declaration"]);
 }
 
 console.log("diagnostics.test ok");
 
-function assertSemanticTokensAreWellFormed(source: string, data: number[]): void {
+function assertSemanticTokensAreWellFormed(
+  source: string,
+  data: number[],
+): void {
   const lines = source.split("\n");
   const decoded = decodeSemanticTokens(source, data);
 
@@ -242,8 +326,14 @@ function assertSemanticTokensAreWellFormed(source: string, data: number[]): void
 
   for (const token of decoded) {
     assert.ok(token.length > 0, "semantic token length must be positive");
-    assert.ok(token.line >= 0 && token.line < lines.length, "semantic token line must exist");
-    assert.ok(token.character >= 0, "semantic token start must be non-negative");
+    assert.ok(
+      token.line >= 0 && token.line < lines.length,
+      "semantic token line must exist",
+    );
+    assert.ok(
+      token.character >= 0,
+      "semantic token start must be non-negative",
+    );
     assert.ok(
       token.character + token.length <= lines[token.line].length,
       "semantic token must stay inside its source line",
@@ -272,7 +362,10 @@ interface DecodedSemanticToken {
   modifiers: string[];
 }
 
-function decodeSemanticTokens(source: string, data: number[]): DecodedSemanticToken[] {
+function decodeSemanticTokens(
+  source: string,
+  data: number[],
+): DecodedSemanticToken[] {
   const lines = source.split("\n");
   const tokens: DecodedSemanticToken[] = [];
   let line = 0;
@@ -295,7 +388,7 @@ function decodeSemanticTokens(source: string, data: number[]): DecodedSemanticTo
       character,
       length,
       modifiers: semanticTokenModifiers.filter((_, modifierIndex) =>
-        Boolean(data[index + 4] & (1 << modifierIndex))
+        Boolean(data[index + 4] & (1 << modifierIndex)),
       ),
       type: semanticTokenTypes[data[index + 3]],
       text: lines[line]?.slice(character, character + length) ?? "",
@@ -313,11 +406,12 @@ function assertToken(
   modifiers: string[] = [],
 ): void {
   assert.ok(
-    tokens.some((token) =>
-      token.text === text &&
-      token.type === type &&
-      token.line === line &&
-      modifiers.every((modifier) => token.modifiers.includes(modifier))
+    tokens.some(
+      (token) =>
+        token.text === text &&
+        token.type === type &&
+        token.line === line &&
+        modifiers.every((modifier) => token.modifiers.includes(modifier)),
     ),
     `expected ${JSON.stringify(text)} on line ${line + 1} to be ${type}` +
       (modifiers.length > 0 ? ` with ${modifiers.join(",")}` : ""),

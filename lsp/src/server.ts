@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import path from "node:path";
 import {
   createConnection,
@@ -66,6 +67,8 @@ const pendingProjectFileValidation = new Map<string, NodeJS.Timeout>();
 const pendingProjectValidation = new Map<string, NodeJS.Timeout>();
 const publishedDiagnostics = new Map<string, string>();
 const projectDiagnosticUris = new Map<string, Set<string>>();
+const runningProjectValidations = new Set<string>();
+const queuedProjectValidations = new Set<string>();
 let workspaceCssTokens: CssToken[] = [];
 let workspaceRootPath: string | null = null;
 let cssTokenRefreshRun = 0;
@@ -191,6 +194,8 @@ connection.onShutdown(() => {
 
   documentState.clear();
   projectDiagnosticUris.clear();
+  queuedProjectValidations.clear();
+  runningProjectValidations.clear();
   workspaceCssTokens = [];
   publishedDiagnostics.clear();
 });
@@ -392,12 +397,30 @@ function scheduleProjectFileValidation(rootPath: string, uri: string): void {
 }
 
 async function validateProject(rootPath: string): Promise<void> {
-  const run = ++projectValidationRun;
-  const openUris = new Set(documents.keys());
-  const results = await buildProjectDiagnostics(rootPath, openUris);
-  if (run !== projectValidationRun) return;
+  if (runningProjectValidations.has(rootPath)) {
+    queuedProjectValidations.add(rootPath);
+    projectValidationRun++;
+    return;
+  }
 
-  publishProjectDiagnostics(rootPath, results);
+  runningProjectValidations.add(rootPath);
+
+  try {
+    const run = ++projectValidationRun;
+    const openUris = new Set(documents.keys());
+    const results = await buildProjectDiagnostics(rootPath, openUris, {
+      includeTypeScript: true,
+    });
+    if (run !== projectValidationRun) return;
+
+    publishProjectDiagnostics(rootPath, results);
+  } finally {
+    runningProjectValidations.delete(rootPath);
+
+    if (queuedProjectValidations.delete(rootPath)) {
+      scheduleProjectValidation(rootPath);
+    }
+  }
 }
 
 async function validateProjectFile(rootPath: string, uri: string): Promise<void> {
@@ -409,7 +432,9 @@ async function validateProjectFile(rootPath: string, uri: string): Promise<void>
     return;
   }
 
-  const result = await buildProjectDiagnosticFile(sourcePath);
+  const result = await buildProjectDiagnosticFile(sourcePath, {
+    includeTypeScript: false,
+  });
   if (documents.get(uri)) return;
 
   if (!result) {

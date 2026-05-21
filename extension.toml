@@ -16,5 +16,5 @@ name = "Imba LSP"
 language = "Imba"
 
 [grammars.imba]
-repository = "file:///Users/fedor/Projects/modules/imba-lsp"
-rev = "da433ec8386424232a4246610243eed1ffd01d3a"
+repository = "https://github.com/HeapVoid/imba-lsp"
+rev = "8d6d5a487071f301b9606337980e9b29c01423da"

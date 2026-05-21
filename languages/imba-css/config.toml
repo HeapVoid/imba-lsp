@@ -1,8 +1,0 @@
-name = "Imba CSS"
-grammar = "css"
-path_suffixes = ["imba-css"]
-line_comments = ["# "]
-tab_size = 4
-hard_tabs = true
-hidden = true
-increase_indent_pattern = "^\\s*(?:@[A-Za-z_-][A-Za-z0-9_-]*(?:\\s+.*)?|[.&:#%]\\S+|[A-Za-z][A-Za-z0-9_-]*(?:[.#:%][^\\s]*)?)\\s*$"

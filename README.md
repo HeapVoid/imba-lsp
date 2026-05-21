@@ -4,7 +4,7 @@ Zed-native language support for Imba.
 
 The project is intentionally split into two different parsing layers:
 
-1. A small Tree-sitter grammar that gives Zed the syntax tree it requires for editor-native highlighting, brackets, indents, and injections.
+1. A small Tree-sitter grammar that gives Zed the syntax tree it requires for editor-native highlighting, brackets, indents, and outline.
 2. `imba-lsp`, backed by the native Imba compiler/parser, for diagnostics, symbols, semantic tokens, completions, hover, and navigation.
 
 The Tree-sitter grammar is not intended to become the source of truth for the Imba language. The source of truth is the native Imba pipeline: lexer, rewriter, Jison parser, AST, and compiler result. See [docs/native-parser-analysis.md](docs/native-parser-analysis.md).
@@ -22,8 +22,8 @@ This repository currently contains a working Zed dev-extension MVP:
 - indentation tokens and indentation blocks
 - a deliberately shallow Tree-sitter editor grammar for `def`, `get`, `set`, `class`, `tag`, `css`, imports, variables, assignments, tags, and `do` blocks
 - basic Imba tags such as `<self>`, `<div.card>`, attributes, events, and inline style brackets
-- initial Zed queries for highlights, brackets, indents, outline, and CSS-block injection
-- CSS blocks inject into a hidden `Imba CSS` Zed language so Imba CSS keeps hard-tab indentation without changing global CSS editor settings
+- initial Zed queries for highlights, brackets, indents, and outline
+- Imba CSS blocks are highlighted through Imba grammar/LSP tokens instead of injecting raw CSS grammar
 - Rust Zed adapter that launches `imba-lsp` through Zed's managed Node runtime
 - compiler-backed diagnostics from native `imba/compiler`
 - document symbols from native `imba/program` outline data, with a local fallback scanner

@@ -6,7 +6,7 @@ This file records implementation details that are easy to forget while working o
 
 The project has two parsing layers:
 
-- Tree-sitter is the Zed editor shell. It exists for syntax highlighting, bracket matching, indentation queries, outline queries, and language injections.
+- Tree-sitter is the Zed editor shell. It exists for syntax highlighting, bracket matching, indentation queries, and outline queries.
 - The native Imba compiler is the semantic source of truth. The LSP uses `imba/compiler` for diagnostics, compiler tokens, generated JS/CSS, AST-ish state, and `locs.spans`.
 
 Do not try to turn `grammar.js` into a full Imba parser. Imba syntax depends on the native lexer, rewriter, Jison parser, and compiler pipeline. Tree-sitter should stay conservative and recovery-friendly.
@@ -101,32 +101,33 @@ hard_tabs = true
 
 Avoid relying on global Zed `hard_tabs`; other languages should not inherit Imba's tab behavior.
 
-## Imba CSS Injection
+## Imba CSS
 
 Imba CSS is indentation-based and nested. It is not raw CSS, even though Zed can benefit from CSS-ish parsing and editor behavior.
 
-`languages/imba/injections.scm` injects `css_block` as a hidden language named `Imba CSS`, not as global `CSS`:
+Do not inject Imba CSS blocks as global `CSS` or as a hidden language with `grammar = "css"`.
 
-```scm
-((css_block) @injection.content
- (#set! injection.language "imba-css"))
-```
+The Zed registry packager builds an extension in isolation, so any language config with `grammar = "css"` requires this extension to ship a CSS grammar. More importantly, raw CSS grammar is the wrong model for Imba's CSS DSL.
 
-The hidden language is defined in `languages/imba-css/config.toml` and keeps hard tabs inside CSS blocks without changing global CSS settings.
+Current behavior:
 
-The reason this matters: when the cursor is inside a Zed injection, Zed uses the injected language settings for editing actions such as Tab. Injecting plain `CSS` caused Tab inside Imba CSS to insert spaces.
+- CSS syntax highlighting comes from the Imba Tree-sitter grammar's own `css_*` nodes.
+- CSS semantic coloring, completions, and hover come from the Imba LSP.
+- Tab behavior stays under the main Imba language config, which sets `hard_tabs = true`.
 
 ## Imba CSS Indent And Context
 
-`languages/imba-css/config.toml` has its own `increase_indent_pattern` for selector-like lines:
+`languages/imba/config.toml` has an `increase_indent_pattern` for Imba block starters, including `css` and `global css`.
+
+The LSP has a separate CSS context detector in `lsp/src/imba-css.ts`. It must walk up the indentation ancestry through nested selector lines until it reaches `css` or `global css`.
+
+Selector-like lines include:
 
 - `&.small`
 - `&:hover`
 - `.nav-menu`
 - `@media (...)`
 - element-ish selector lines
-
-The LSP has a separate CSS context detector in `lsp/src/imba-css.ts`. It must walk up the indentation ancestry through nested selector lines until it reaches `css` or `global css`.
 
 Do not stop at the first parent line with a smaller indent. In real Imba CSS that parent is often a selector such as `&.small` or `.nav-menu`, and the code is still inside CSS.
 

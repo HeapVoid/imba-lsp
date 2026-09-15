@@ -15,10 +15,6 @@ struct ImbaExtension {
 
 impl ImbaExtension {
     fn lsp_server_path(&mut self, language_server_id: &zed::LanguageServerId) -> Result<String> {
-        if let Some(path) = local_lsp_server_path()? {
-            return Ok(path.to_string_lossy().to_string());
-        }
-
         self.install_lsp_package_if_needed(language_server_id)?;
 
         let path = npm_lsp_server_path()?;
@@ -79,41 +75,6 @@ impl zed::Extension for ImbaExtension {
             env: worktree.shell_env(),
         })
     }
-}
-
-fn local_lsp_server_path() -> Result<Option<PathBuf>> {
-    let extension_work_dir = env::current_dir()
-        .map_err(|error| format!("Could not resolve Imba extension work directory: {error}"))?;
-
-    for path in local_lsp_server_candidates(&extension_work_dir) {
-        if is_file(&path) {
-            return Ok(Some(path));
-        }
-    }
-
-    Ok(None)
-}
-
-fn local_lsp_server_candidates(extension_work_dir: &Path) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-
-    if let Some(extension_root) = dev_extension_root(extension_work_dir) {
-        paths.push(lsp_server_path_in(extension_root));
-    }
-
-    paths.push(lsp_server_path_in(extension_work_dir));
-
-    paths
-}
-
-fn dev_extension_root(extension_work_dir: &Path) -> Option<PathBuf> {
-    let extensions_dir = extension_work_dir.parent()?.parent()?;
-
-    Some(extensions_dir.join("installed").join("imba"))
-}
-
-fn lsp_server_path_in(root: impl AsRef<Path>) -> PathBuf {
-    root.as_ref().join("lsp").join(LSP_SERVER_PATH)
 }
 
 fn npm_lsp_server_path() -> Result<PathBuf> {

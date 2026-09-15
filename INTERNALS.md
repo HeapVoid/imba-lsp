@@ -39,7 +39,7 @@ The dev extension is installed as a symlink:
 ~/Library/Application Support/Zed/extensions/installed/imba -> /Users/fedor/Projects/modules/imba-lsp
 ```
 
-`extension.toml` registers the local grammar with a `file://` repository and an exact commit SHA. Zed does not accept `rev = "HEAD"` here.
+`extension.toml` registers the grammar from the public repository at an exact commit SHA.
 
 For local dev-extension work:
 
@@ -49,10 +49,9 @@ npm run lsp:build
 npm run zed:check-extension
 ```
 
-The Rust adapter resolves the LSP in two phases:
+The Rust adapter installs the pinned `imba-lsp` version from npm through Zed's `npm_install_package` API and runs `node_modules/imba-lsp/dist/src/server.js --stdio` with Zed's managed Node runtime.
 
-1. Prefer a local `lsp/dist/src/server.js` from the dev extension checkout, so local Zed testing keeps using the code in this repository after `npm run lsp:build`.
-2. If no local build exists, install `imba-lsp` from npm through Zed's `npm_install_package` API and run `node_modules/imba-lsp/dist/src/server.js`.
+For local LSP development, set `lsp.imba-lsp.binary.path` to your Node executable and `lsp.imba-lsp.binary.arguments` to the absolute path of the built `lsp/dist/src/server.js` followed by `--stdio`. The complete settings example is in [README.md](README.md#zed-dev-extension). Rebuild the LSP and restart it in Zed after server changes; remove the override to test the npm-installed server.
 
 Published Zed extensions are precompiled by Zed's packaging flow. End users should not need Rust, `tree-sitter-cli`, or the local dev toolchain just to install the extension. Rust via `rustup` is only required for local dev extension compilation.
 

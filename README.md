@@ -131,16 +131,36 @@ Zed language extensions use:
 - `languages/imba/config.toml` for language metadata
 - `languages/imba/*.scm` for Tree-sitter queries
 
-For local development, install this repository as a Zed dev extension. The grammar registration in `extension.toml` points to this local repository with a `file://` URL and an exact commit SHA. Zed does not accept `rev = "HEAD"` for this local grammar checkout path.
+For local development, install this repository as a Zed dev extension. The grammar registration in `extension.toml` points to the public repository at an exact commit SHA.
 
-The LSP is registered in the Zed extension through the Rust adapter in `src/lib.rs`. For local dev-extension testing, build the LSP before reinstalling the extension:
+The LSP is registered through the Rust adapter in `src/lib.rs`. By default, the adapter installs the pinned `imba-lsp` version from npm through Zed's extension API and launches `node_modules/imba-lsp/dist/src/server.js --stdio` with Zed's managed Node runtime.
+
+To test a local LSP build, first install its dependencies and build it:
 
 ```sh
 npm --prefix lsp install
 npm run lsp:build
 ```
 
-The adapter launches Zed's managed Node binary. In local development it uses the built `lsp/dist/src/server.js` from this repository. In a published extension, when the local build is absent, the adapter installs `imba-lsp` from npm through Zed's extension API and launches `node_modules/imba-lsp/dist/src/server.js --stdio`.
+Then add a binary override to your Zed user settings, merging it into the existing `lsp` object if present:
+
+```json
+{
+  "lsp": {
+    "imba-lsp": {
+      "binary": {
+        "path": "/absolute/path/to/node",
+        "arguments": [
+          "/absolute/path/to/imba-lsp/lsp/dist/src/server.js",
+          "--stdio"
+        ]
+      }
+    }
+  }
+}
+```
+
+Use `command -v node` to find your Node executable, and replace the script path with the absolute path to this checkout. Rebuild with `npm run lsp:build` after changing the server, then restart the language server in Zed. Remove the `binary` override to test the default npm-installed server. See [Zed's language server configuration docs](https://zed.dev/docs/configuring-languages#configuring-language-servers).
 
 Check the npm package contents before publishing:
 
